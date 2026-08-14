@@ -1,16 +1,65 @@
-# React + Vite
+# LabTrack - Laboratory & Equipment Management System
 
-This template provides a minimal setup to get React working in Vite with HMR and some Oxlint rules.
+LabTrack is a web platform designed to streamline laboratory inventory tracking, equipment issue & return operations, inter-lab transfers, and procurement analytics.
 
-Currently, two official plugins are available:
+---
 
-- [@vitejs/plugin-react](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react) uses [Oxc](https://oxc.rs)
-- [@vitejs/plugin-react-swc](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react-swc) uses [SWC](https://swc.rs/)
+## 🚀 Tech Stack
 
-## React Compiler
+* **Core**: React 19, Vite 8, React Router v7
+* **Styling & UI**: Vanilla CSS, Lucide Icons
+* **Data & Charts**: Recharts
+* **Linting**: Oxlint
 
-The React Compiler is not enabled on this template because of its impact on dev & build performances. To add it, see [this documentation](https://react.dev/learn/react-compiler/installation).
+---
 
-## Expanding the Oxlint configuration
+## 🌿 Git Branching Strategy (3-Member Team)
 
-If you are developing a production application, we recommend using TypeScript with type-aware lint rules enabled. Check out the [TS template](https://github.com/vitejs/vite/tree/main/packages/create-vite/template-react-ts) for information on how to integrate TypeScript and Oxlint's TypeScript related rules in your project.
+We follow a **Feature Branch Workflow** branching off `dev`:
+
+* **`main`**: Production-ready, stable code only.
+* **`dev`**: Integration branch for active development.
+
+### 👥 Team Work Division
+
+| Member | Focus Area | Functional Modules | Branch Prefix |
+| :--- | :--- | :--- | :--- |
+| **Member 1** | **Equipment & Operations** | Equipment inventory, Add/Detail, Issue & Return, Event Issue, Bulk Import | `feature/equipment-*`, `feature/operations-*` |
+| **Member 2** | **Requests & Dashboards** | Equipment requests, Inter-lab transfers, Transactions, Faculty/Student dashboards | `feature/requests-*`, `feature/dashboards-*` |
+| **Member 3** | **Admin & Analytics** | Reports & Analytics, Smart Procurement, User Management, Contexts & Services | `feature/analytics-*`, `feature/admin-*` |
+
+---
+
+## 🛠️ Git Workflow Rules
+
+1. **Always branch off `dev`**:
+   ```bash
+   git checkout dev
+   git pull origin dev
+   git checkout -b feature/your-feature-name
+   ```
+2. **Commit with descriptive messages**:
+   ```bash
+   git commit -m "feat(equipment): add search and filter options"
+   ```
+3. **Submit a Pull Request (PR)** targeting `dev`. Require **at least 1 peer approval** before merging.
+
+---
+
+## 🏃 Getting Started
+
+1. **Install Dependencies**:
+   ```bash
+   npm install
+   ```
+
+2. **Run Development Server**:
+   ```bash
+   npm run dev
+   ```
+
+3. **Build for Production**:
+   ```bash
+   npm run build
+   ```
+
