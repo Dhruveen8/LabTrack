@@ -6,7 +6,7 @@ LabTrack is an enterprise-grade, multi-department web platform built to handle u
 
 ## 🚀 Tech Stack & Enterprise Architecture
 
-* **Frontend**: React 19, Vite 8, React Router v7, Lucide Icons, Recharts, `qrcode.react`
+* **Frontend**: React 19, TypeScript (`.tsx`), Vite 8, React Router v7, TanStack Query (React Query), Lucide Icons, Recharts, `qrcode.react`
 * **Styling & Design System**: Vanilla CSS Design Tokens
 * **ML Microservice**: Python FastAPI, PyTorch, YOLOv8, OpenCV, PaddleOCR
 * **Data Storage**: Object Storage (S3/R2 for photos) + Relational DB (PostgreSQL) + Redis Caching
@@ -18,14 +18,19 @@ LabTrack is an enterprise-grade, multi-department web platform built to handle u
 
 To ensure LabTrack scales seamlessly across multiple departments, thousands of students, and thousands of equipment items:
 
-1. **Multi-Department Data Hierarchy**:
+1. **TypeScript (`.tsx`) Adoption Roadmap**:
+   Strict type-safety across all equipment models, user roles, and API response schemas to prevent runtime crashes during university-wide refactoring.
+2. **TanStack Query (React Query) Server Caching**:
+   Replaces heavy client-side React Context state for inventory items. Automatically handles server-side caching, background auto-refetching, and pagination for 10,000+ items.
+3. **Multi-Department Data Hierarchy**:
    `University` ➔ `Departments` (CS, EEE, Mech, Bio) ➔ `Labs` (Robotics Lab, VLSI Lab) ➔ `Equipment`
-2. **Role-Based Access Control (RBAC)**:
+4. **Role-Based Access Control (RBAC)**:
    Strict permission boundaries for `Super Admin`, `Dept Admin`, `Lab Assistant`, `Faculty`, and `Student`.
-3. **Asynchronous ML Processing**:
+5. **Asynchronous ML Processing**:
    Heavy AI processing (Damage Detection & Bulk OCR Scanning) is offloaded to async message queues (Redis/Celery) to keep HTTP requests fast and resilient.
-4. **Cloud Media Storage**:
+6. **Cloud Media Storage**:
    Equipment images and Before/After scan photos are stored in Cloud Object Storage (S3/R2) with CDN delivery.
+
 
 ---
 
@@ -68,7 +73,45 @@ Stores a direct web URL: `https://labtrack.univ.edu/equipment/LT-CS-EQ-00492`. S
 
 ---
 
+## 🛠️ Backend Architecture Blueprint (Production / High Scale)
+
+For enterprise university deployment, LabTrack uses a decoupled **Python FastAPI + PostgreSQL + Redis** architecture:
+
+```
+┌─────────────────────────┐       ┌──────────────────────────┐       ┌────────────────────────┐
+│  React 19 Frontend      │ ────► │  Python FastAPI Backend  │ ────► │  PostgreSQL Database   │
+│  (Vite SPA / CDN)       │ ◄──── │  (REST API & WebSockets) │ ◄──── │  (Relational Data)     │
+└─────────────────────────┘       └────────────┬─────────────┘       └────────────────────────┘
+                                               │
+                                               ▼
+                                  ┌──────────────────────────┐       ┌────────────────────────┐
+                                  │  Celery + Redis Worker   │ ────► │  S3 / R2 Cloud Storage │
+                                  │  (Async ML Processing)   │       │  (Equipment Photos)    │
+                                  └──────────────────────────┘       └────────────────────────┘
+```
+
+### 🗄️ Relational Database Schema (PostgreSQL)
+
+* **`departments`**: `id`, `name`, `code` (e.g. `CS`, `EEE`).
+* **`labs`**: `id`, `department_id`, `name`, `location`, `in_charge_user_id`.
+* **`equipment`**: `asset_id` (PK, e.g. `LT-CS-EQ-00492`), `lab_id`, `name`, `category`, `serial_number`, `status` (`AVAILABLE | ISSUED | MAINTENANCE`), `qr_code_url`.
+* **`users`**: `id`, `email`, `password_hash`, `role` (`SUPER_ADMIN | DEPT_ADMIN | ASSISTANT | FACULTY | STUDENT`), `department_id`.
+* **`transactions`**: `id`, `asset_id`, `borrower_id`, `issuer_id`, `issue_time`, `return_time`, `issue_photo_url`, `return_photo_url`, `damage_flag`, `damage_analysis_result`.
+* **`requests`**: `id`, `user_id`, `asset_id`, `status` (`PENDING | APPROVED | REJECTED`), `reason`.
+
+### 🌐 API Module Structure (`/api/v1/`)
+
+* **`/auth`**: JWT Authentication, Role Permissions, University SSO (SAML 2.0 / OAuth2).
+* **`/labs`**: Department & Lab management CRUD.
+* **`/equipment`**: Equipment CRUD, Asset ID generator, Category Matcher.
+* **`/operations`**: Issue Equipment, Return Equipment, Inter-Lab Transfers, Transactions audit log.
+* **`/ml`**: `/detect-damage` (Before vs After image comparison) and `/bulk-ocr` (Label OCR scan).
+* **`/analytics`**: Smart Procurement predictions & usage reports.
+
+---
+
 ## 🌿 Git Branching Strategy (3-Member Team)
+
 
 We follow a **Feature Branch Workflow** branching off `dev`:
 
