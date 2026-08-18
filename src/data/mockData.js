@@ -1,55 +1,89 @@
 // Mock Data for LabTrack - University Laboratory Equipment Management System
 
+export const INITIAL_DEPARTMENTS = [
+  {
+    id: 'DEPT-EE',
+    name: 'Department of Electrical & Electronics Engineering',
+    code: 'EE',
+    hod: 'Dr. Marcus Brody Sr.',
+    totalLabs: 2
+  },
+  {
+    id: 'DEPT-CS',
+    name: 'Department of Computer Science & Engineering',
+    code: 'CS',
+    hod: 'Prof. Eleanor Vance',
+    totalLabs: 1
+  },
+  {
+    id: 'DEPT-ROB',
+    name: 'Department of Robotics & Automation',
+    code: 'ROB',
+    hod: 'Dr. Sarah Jenkins',
+    totalLabs: 1
+  }
+];
+
 export const INITIAL_USERS = [
   {
     id: 'USR-1001',
     name: 'Dr. Robert Vance',
     email: 'admin@university.edu',
     role: 'admin',
-    department: 'University Administration',
+    departmentId: 'DEPT-CS',
+    department: 'Department of Computer Science & Engineering',
     universityId: 'ADM-2024-001',
     phone: '+1 (555) 019-2831',
-    status: 'Active'
+    status: 'Active',
+    assignedLabIds: []
   },
   {
     id: 'USR-1002',
     name: 'Marcus Brody',
     email: 'assistant@university.edu',
     role: 'assistant',
-    department: 'Electrical Engineering',
+    departmentId: 'DEPT-EE',
+    department: 'Department of Electrical & Electronics Engineering',
     universityId: 'LAB-2024-042',
     phone: '+1 (555) 014-9921',
-    status: 'Active'
+    status: 'Active',
+    assignedLabIds: ['LAB-IOT', 'LAB-ECE'] // Manages multiple labs in Electrical Dept
   },
   {
     id: 'USR-1003',
     name: 'Prof. Eleanor Vance',
     email: 'faculty@university.edu',
     role: 'faculty',
-    department: 'Computer Science & Robotics',
+    departmentId: 'DEPT-CS',
+    department: 'Department of Computer Science & Engineering',
     universityId: 'FAC-2024-108',
     phone: '+1 (555) 018-4432',
-    status: 'Active'
+    status: 'Active',
+    assignedLabIds: []
   },
   {
     id: 'USR-1004',
     name: 'Alex Johnson',
     email: 'student@university.edu',
     role: 'student',
-    department: 'Computer Science B.Tech',
+    departmentId: 'DEPT-CS',
+    department: 'Department of Computer Science & Engineering',
     universityId: 'STU-2024-884',
     phone: '+1 (555) 012-3390',
-    status: 'Active'
+    status: 'Active',
+    assignedLabIds: []
   },
   {
     id: 'USR-1005',
     name: 'Sarah Connor',
     email: 's.connor@university.edu',
     role: 'student',
-    department: 'Robotics Engineering',
+    departmentId: 'DEPT-ROB',
+    department: 'Department of Robotics & Automation',
     universityId: 'STU-2024-912',
     phone: '+1 (555) 015-7721',
-    status: 'Active'
+    status: 'Active',
+    assignedLabIds: []
   }
 ];
 
@@ -57,52 +91,83 @@ export const INITIAL_LABS = [
   {
     id: 'LAB-IOT',
     name: 'IoT & Embedded Systems Lab',
+    departmentId: 'DEPT-EE',
+    departmentName: 'Department of Electrical & Electronics Engineering',
     location: 'Engineering Building Room 302',
+    inchargeUserId: 'USR-1002',
     incharge: 'Marcus Brody',
-    totalEquipment: 145,
-    available: 110,
-    borrowed: 28,
-    maintenance: 7,
-    pendingTransfers: 2,
+    totalEquipment: 70,
+    available: 52,
+    borrowed: 18,
+    maintenance: 0,
+    pendingTransfers: 1,
     description: 'Specialized lab for IoT prototyping, microcontroller programming, and wireless sensor networks.'
   },
   {
     id: 'LAB-ECE',
     name: 'Electronics & VLSI Lab',
+    departmentId: 'DEPT-EE',
+    departmentName: 'Department of Electrical & Electronics Engineering',
     location: 'Science Complex Hall B',
-    incharge: 'Dr. Sarah Jenkins',
-    totalEquipment: 180,
-    available: 140,
-    borrowed: 32,
-    maintenance: 8,
+    inchargeUserId: 'USR-1002',
+    incharge: 'Marcus Brody',
+    totalEquipment: 50,
+    available: 38,
+    borrowed: 12,
+    maintenance: 0,
     pendingTransfers: 1,
     description: 'High-precision oscilloscope workstations, signal generators, and circuit design setups.'
   },
   {
     id: 'LAB-ROB',
     name: 'Robotics & Automation Lab',
+    departmentId: 'DEPT-ROB',
+    departmentName: 'Department of Robotics & Automation',
     location: 'Innovation Hub Lab 104',
-    incharge: 'Prof. Eleanor Vance',
-    totalEquipment: 115,
-    available: 85,
-    borrowed: 24,
-    maintenance: 6,
-    pendingTransfers: 3,
-    description: 'Robotic arms, autonomous vehicles, LiDAR sensors, and computer vision hardware.'
+    inchargeUserId: 'USR-1002',
+    incharge: 'Marcus Brody',
+    totalEquipment: 7,
+    available: 3,
+    borrowed: 4,
+    maintenance: 0,
+    pendingTransfers: 1,
+    description: 'Robotic arms, autonomous vehicles, LiDAR sensors, and 3D printing equipment.'
   },
   {
     id: 'LAB-CS',
     name: 'Computer & AI Research Lab',
+    departmentId: 'DEPT-CS',
+    departmentName: 'Department of Computer Science & Engineering',
     location: 'IT Building Floor 4',
-    incharge: 'David Miller',
-    totalEquipment: 100,
-    available: 77,
-    borrowed: 14,
-    maintenance: 9,
+    inchargeUserId: 'USR-1002',
+    incharge: 'Marcus Brody',
+    totalEquipment: 6,
+    available: 4,
+    borrowed: 2,
+    maintenance: 0,
     pendingTransfers: 0,
-    description: 'High-performance GPU servers, VR headsets, embedded edge AI kits.'
+    description: 'High-performance workstations, VR headsets, and embedded edge AI computing modules.'
   }
 ];
+
+// Helper to generate initial units for an equipment model
+const createInitialUnits = (labCode, catCode, totalQty, borrowedQty = 0, name = '') => {
+  const units = [];
+  for (let i = 1; i <= totalQty; i++) {
+    const seqStr = String(i).padStart(5, '0');
+    const assetId = `LT-${labCode}-${catCode}-${seqStr}`;
+    const isBorrowed = i <= borrowedQty;
+    units.push({
+      assetId,
+      name,
+      status: isBorrowed ? 'Issued' : 'Available',
+      condition: 'Excellent',
+      serialNumber: `${labCode}-${catCode}-${seqStr}`,
+      qrCodeUrl: `https://labtrack.univ.edu/equipment/${assetId}`
+    });
+  }
+  return units;
+};
 
 export const INITIAL_EQUIPMENT = [
   {
@@ -111,6 +176,7 @@ export const INITIAL_EQUIPMENT = [
     category: 'Microcontrollers',
     labId: 'LAB-IOT',
     labName: 'IoT & Embedded Systems Lab',
+    departmentId: 'DEPT-EE',
     quantity: 25,
     availableQuantity: 18,
     borrowedQuantity: 7,
@@ -119,7 +185,7 @@ export const INITIAL_EQUIPMENT = [
     purchaseDate: '2023-09-15',
     description: 'Standard ATmega328P development kit with breadboard, sensors, and connecting cables.',
     serialNumber: 'ARD-UNO-2023-88',
-    qrCode: 'EQ-1001'
+    units: createInitialUnits('IOT', 'MC', 25, 7, 'Arduino Uno R3 Starter Kit')
   },
   {
     id: 'EQ-1002',
@@ -127,6 +193,7 @@ export const INITIAL_EQUIPMENT = [
     category: 'Single Board Computers',
     labId: 'LAB-IOT',
     labName: 'IoT & Embedded Systems Lab',
+    departmentId: 'DEPT-EE',
     quantity: 15,
     availableQuantity: 4,
     borrowedQuantity: 11,
@@ -135,7 +202,7 @@ export const INITIAL_EQUIPMENT = [
     purchaseDate: '2023-11-20',
     description: 'Quad-core Cortex-A72 board with dual 4K micro-HDMI, USB 3.0, and 8GB LPDDR4 SDRAM.',
     serialNumber: 'RPI4-8GB-9021',
-    qrCode: 'EQ-1002'
+    units: createInitialUnits('IOT', 'SBC', 15, 11, 'Raspberry Pi 4 Model B (8GB)')
   },
   {
     id: 'EQ-1003',
@@ -143,15 +210,16 @@ export const INITIAL_EQUIPMENT = [
     category: 'Testing & Measurement',
     labId: 'LAB-ECE',
     labName: 'Electronics & VLSI Lab',
+    departmentId: 'DEPT-EE',
     quantity: 10,
     availableQuantity: 2,
     borrowedQuantity: 8,
-    condition: 'Calibration Required',
+    condition: 'Good',
     status: 'Available',
     purchaseDate: '2022-04-10',
     description: 'Dual-channel 1GS/s digital storage oscilloscope with USB storage and FFT spectrum analyzer.',
     serialNumber: 'TEK-TBS1102-33',
-    qrCode: 'EQ-1003'
+    units: createInitialUnits('ECE', 'TM', 10, 8, 'Tektronix 100MHz Digital Oscilloscope')
   },
   {
     id: 'EQ-1004',
@@ -159,6 +227,7 @@ export const INITIAL_EQUIPMENT = [
     category: 'Testing & Measurement',
     labId: 'LAB-ECE',
     labName: 'Electronics & VLSI Lab',
+    departmentId: 'DEPT-EE',
     quantity: 8,
     availableQuantity: 6,
     borrowedQuantity: 2,
@@ -167,7 +236,7 @@ export const INITIAL_EQUIPMENT = [
     purchaseDate: '2023-01-05',
     description: '25MHz dual channel arbitrary waveform function generator with SiFi technology.',
     serialNumber: 'RIG-DG1022-12',
-    qrCode: 'EQ-1004'
+    units: createInitialUnits('ECE', 'TM', 8, 2, 'Rigol DG1022Z Function Generator')
   },
   {
     id: 'EQ-1005',
@@ -175,6 +244,7 @@ export const INITIAL_EQUIPMENT = [
     category: 'Workshop Tools',
     labId: 'LAB-ECE',
     labName: 'Electronics & VLSI Lab',
+    departmentId: 'DEPT-EE',
     quantity: 12,
     availableQuantity: 10,
     borrowedQuantity: 2,
@@ -183,7 +253,7 @@ export const INITIAL_EQUIPMENT = [
     purchaseDate: '2022-08-14',
     description: '50W ESD safe microprocessor controlled soldering station with digital display.',
     serialNumber: 'WEL-50W-441',
-    qrCode: 'EQ-1005'
+    units: createInitialUnits('ECE', 'WT', 12, 2, 'Weller Digital Soldering Station WESD51')
   },
   {
     id: 'EQ-1006',
@@ -191,15 +261,16 @@ export const INITIAL_EQUIPMENT = [
     category: 'Rapid Prototyping',
     labId: 'LAB-ROB',
     labName: 'Robotics & Automation Lab',
+    departmentId: 'DEPT-ROB',
     quantity: 4,
-    availableQuantity: 0,
-    borrowedQuantity: 4,
-    condition: 'Under Maintenance',
-    status: 'Unavailable',
+    availableQuantity: 2,
+    borrowedQuantity: 2,
+    condition: 'Good',
+    status: 'Available',
     purchaseDate: '2023-03-01',
     description: 'FDM 3D printer with silent 32-bit motherboard and textured glass build plate.',
     serialNumber: 'END-3V2-771',
-    qrCode: 'EQ-1006'
+    units: createInitialUnits('ROB', 'RP', 4, 2, 'Ender 3 V2 3D Printer')
   },
   {
     id: 'EQ-1007',
@@ -207,6 +278,7 @@ export const INITIAL_EQUIPMENT = [
     category: 'Microcontrollers',
     labId: 'LAB-IOT',
     labName: 'IoT & Embedded Systems Lab',
+    departmentId: 'DEPT-EE',
     quantity: 30,
     availableQuantity: 20,
     borrowedQuantity: 10,
@@ -215,7 +287,7 @@ export const INITIAL_EQUIPMENT = [
     purchaseDate: '2024-01-10',
     description: 'Dual-core Tensilica LX6 microcontroller with integrated Wi-Fi and BLE stack.',
     serialNumber: 'ESP32-WROOM-32D',
-    qrCode: 'EQ-1007'
+    units: createInitialUnits('IOT', 'MC', 30, 10, 'ESP32 Wi-Fi + Bluetooth NodeMCU')
   },
   {
     id: 'EQ-1008',
@@ -223,6 +295,7 @@ export const INITIAL_EQUIPMENT = [
     category: 'Robotics',
     labId: 'LAB-ROB',
     labName: 'Robotics & Automation Lab',
+    departmentId: 'DEPT-ROB',
     quantity: 3,
     availableQuantity: 1,
     borrowedQuantity: 2,
@@ -231,7 +304,7 @@ export const INITIAL_EQUIPMENT = [
     purchaseDate: '2023-06-25',
     description: 'Industrial teaching arm with inverse kinematics interface and suction gripper.',
     serialNumber: 'ROB-ARM-6DOF-03',
-    qrCode: 'EQ-1008'
+    units: createInitialUnits('ROB', 'ROB', 3, 2, '6-DOF Robotic Arm Workstation')
   },
   {
     id: 'EQ-1009',
@@ -239,6 +312,7 @@ export const INITIAL_EQUIPMENT = [
     category: 'Testing & Measurement',
     labId: 'LAB-ECE',
     labName: 'Electronics & VLSI Lab',
+    departmentId: 'DEPT-EE',
     quantity: 20,
     availableQuantity: 16,
     borrowedQuantity: 4,
@@ -247,7 +321,7 @@ export const INITIAL_EQUIPMENT = [
     purchaseDate: '2023-02-18',
     description: 'True-RMS industrial digital multimeter with low pass filter and temperature sensor.',
     serialNumber: 'FLU-87V-990',
-    qrCode: 'EQ-1009'
+    units: createInitialUnits('ECE', 'TM', 20, 4, 'Fluke 87V Industrial Multimeter')
   },
   {
     id: 'EQ-1010',
@@ -255,6 +329,7 @@ export const INITIAL_EQUIPMENT = [
     category: 'AR / VR',
     labId: 'LAB-CS',
     labName: 'Computer & AI Research Lab',
+    departmentId: 'DEPT-CS',
     quantity: 6,
     availableQuantity: 4,
     borrowedQuantity: 2,
@@ -263,62 +338,7 @@ export const INITIAL_EQUIPMENT = [
     purchaseDate: '2023-10-12',
     description: 'Standalone VR headset for immersive simulation and 3D environment modeling.',
     serialNumber: 'OCU-Q2-256-08',
-    qrCode: 'EQ-1010'
-  }
-];
-
-export const INITIAL_TRANSACTIONS = [
-  {
-    id: 'TXN-9001',
-    equipmentId: 'EQ-1002',
-    equipmentName: 'Raspberry Pi 4 Model B (8GB)',
-    borrowerName: 'Alex Johnson',
-    borrowerId: 'STU-2024-884',
-    borrowerType: 'Student',
-    originLab: 'IoT & Embedded Systems Lab',
-    issueDate: '2026-08-01',
-    dueDate: '2026-08-15',
-    returnDate: null,
-    status: 'Issued'
-  },
-  {
-    id: 'TXN-9002',
-    equipmentId: 'EQ-1003',
-    equipmentName: 'Tektronix 100MHz Digital Oscilloscope',
-    borrowerName: 'Prof. Eleanor Vance',
-    borrowerId: 'FAC-2024-108',
-    borrowerType: 'Faculty',
-    originLab: 'Electronics & VLSI Lab',
-    issueDate: '2026-07-20',
-    dueDate: '2026-08-05',
-    returnDate: null,
-    status: 'Overdue'
-  },
-  {
-    id: 'TXN-9003',
-    equipmentId: 'EQ-1001',
-    equipmentName: 'Arduino Uno R3 Starter Kit',
-    borrowerName: 'Sarah Connor',
-    borrowerId: 'STU-2024-912',
-    borrowerType: 'Student',
-    originLab: 'IoT & Embedded Systems Lab',
-    issueDate: '2026-07-28',
-    dueDate: '2026-08-10',
-    returnDate: '2026-08-09',
-    status: 'Returned'
-  },
-  {
-    id: 'TXN-9004',
-    equipmentId: 'EQ-1008',
-    equipmentName: '6-DOF Robotic Arm Workstation',
-    borrowerName: 'Prof. Eleanor Vance',
-    borrowerId: 'FAC-2024-108',
-    borrowerType: 'Faculty',
-    originLab: 'Robotics & Automation Lab',
-    issueDate: '2026-08-05',
-    dueDate: '2026-08-25',
-    returnDate: null,
-    status: 'Issued'
+    units: createInitialUnits('CS', 'VR', 6, 2, 'Oculus Quest 2 VR Headset 256GB')
   }
 ];
 
@@ -327,49 +347,127 @@ export const INITIAL_REQUESTS = [
     id: 'REQ-5001',
     requesterName: 'Alex Johnson',
     requesterId: 'STU-2024-884',
-    requesterRole: 'Student',
-    department: 'Computer Science B.Tech',
+    requesterRole: 'student',
+    department: 'Department of Computer Science & Engineering',
     equipmentId: 'EQ-1007',
     equipmentName: 'ESP32 Wi-Fi + Bluetooth NodeMCU',
+    labId: 'LAB-IOT',
     labName: 'IoT & Embedded Systems Lab',
-    quantity: 2,
-    requestDate: '2026-08-08',
-    requiredFrom: '2026-08-11',
-    requiredUntil: '2026-08-25',
+    quantity: 1,
+    requestDate: '2026-08-10',
+    requiredFrom: '2026-08-12',
+    requiredUntil: '2026-08-24', // 12 days (within 14 days limit)
     purpose: 'Capstone Project - Smart Agriculture IoT Node',
-    status: 'Pending'
+    status: 'Pending',
+    unitAssetId: null
   },
   {
     id: 'REQ-5002',
     requesterName: 'Prof. Eleanor Vance',
     requesterId: 'FAC-2024-108',
-    requesterRole: 'Faculty',
-    department: 'Computer Science & Robotics',
+    requesterRole: 'faculty',
+    department: 'Department of Computer Science & Engineering',
     equipmentId: 'EQ-1010',
     equipmentName: 'Oculus Quest 2 VR Headset 256GB',
+    labId: 'LAB-CS',
     labName: 'Computer & AI Research Lab',
     quantity: 1,
     requestDate: '2026-08-07',
-    requiredFrom: '2026-08-12',
-    requiredUntil: '2026-08-20',
+    requiredFrom: '2026-08-10',
+    requiredUntil: '2026-08-30', // 20 days (within 30 days limit)
     purpose: 'Virtual Reality Lab Demonstration for CS402',
-    status: 'Approved'
+    status: 'Approved', // Approved by assistant, ready for physical QR pickup!
+    unitAssetId: null
   },
   {
     id: 'REQ-5003',
     requesterName: 'Sarah Connor',
     requesterId: 'STU-2024-912',
-    requesterRole: 'Student',
-    department: 'Robotics Engineering',
+    requesterRole: 'student',
+    department: 'Department of Robotics & Automation',
     equipmentId: 'EQ-1006',
     equipmentName: 'Ender 3 V2 3D Printer',
+    labId: 'LAB-ROB',
     labName: 'Robotics & Automation Lab',
     quantity: 1,
     requestDate: '2026-08-09',
     requiredFrom: '2026-08-15',
-    requiredUntil: '2026-08-22',
+    requiredUntil: '2026-08-25', // 10 days
     purpose: 'RoboWars Frame Rapid Prototyping',
-    status: 'Pending'
+    status: 'Pending',
+    unitAssetId: null
+  },
+  {
+    id: 'REQ-5004',
+    requesterName: 'Alex Johnson',
+    requesterId: 'STU-2024-884',
+    requesterRole: 'student',
+    department: 'Department of Computer Science & Engineering',
+    equipmentId: 'EQ-1002',
+    equipmentName: 'Raspberry Pi 4 Model B (8GB)',
+    labId: 'LAB-IOT',
+    labName: 'IoT & Embedded Systems Lab',
+    quantity: 1,
+    requestDate: '2026-08-01',
+    requiredFrom: '2026-08-01',
+    requiredUntil: '2026-08-14', // 13 days
+    purpose: 'Edge AI inference testing',
+    status: 'Issued',
+    unitAssetId: 'LT-IOT-SBC-00001'
+  }
+];
+
+export const INITIAL_TRANSACTIONS = [
+  {
+    id: 'TXN-9001',
+    requestId: 'REQ-5004',
+    equipmentId: 'EQ-1002',
+    equipmentName: 'Raspberry Pi 4 Model B (8GB)',
+    unitAssetId: 'LT-IOT-SBC-00001',
+    borrowerName: 'Alex Johnson',
+    borrowerId: 'STU-2024-884',
+    borrowerType: 'student',
+    labId: 'LAB-IOT',
+    originLab: 'IoT & Embedded Systems Lab',
+    issueDate: '2026-08-01',
+    dueDate: '2026-08-14',
+    returnDate: null,
+    status: 'Issued',
+    reissuedCount: 0
+  },
+  {
+    id: 'TXN-9002',
+    requestId: 'REQ-5000',
+    equipmentId: 'EQ-1003',
+    equipmentName: 'Tektronix 100MHz Digital Oscilloscope',
+    unitAssetId: 'LT-ECE-TM-00001',
+    borrowerName: 'Prof. Eleanor Vance',
+    borrowerId: 'FAC-2024-108',
+    borrowerType: 'faculty',
+    labId: 'LAB-ECE',
+    originLab: 'Electronics & VLSI Lab',
+    issueDate: '2026-07-20',
+    dueDate: '2026-08-18', // 29 days (within 30 days)
+    returnDate: null,
+    status: 'Issued',
+    reissuedCount: 0
+  },
+  {
+    id: 'TXN-9003',
+    requestId: 'REQ-4999',
+    equipmentId: 'EQ-1001',
+    equipmentName: 'Arduino Uno R3 Starter Kit',
+    unitAssetId: 'LT-IOT-MC-00001',
+    borrowerName: 'Sarah Connor',
+    borrowerId: 'STU-2024-912',
+    borrowerType: 'student',
+    labId: 'LAB-IOT',
+    originLab: 'IoT & Embedded Systems Lab',
+    issueDate: '2026-07-28',
+    dueDate: '2026-08-10',
+    returnDate: '2026-08-09',
+    status: 'Returned',
+    reissuedCount: 0
   }
 ];
 
@@ -377,7 +475,9 @@ export const INITIAL_TRANSFERS = [
   {
     id: 'TRF-3001',
     requestingLab: 'Robotics & Automation Lab',
+    requestingLabId: 'LAB-ROB',
     owningLab: 'Electronics & VLSI Lab',
+    owningLabId: 'LAB-ECE',
     equipmentId: 'EQ-1003',
     equipmentName: 'Tektronix 100MHz Digital Oscilloscope',
     requestedBy: 'Prof. Eleanor Vance',
@@ -389,7 +489,9 @@ export const INITIAL_TRANSFERS = [
   {
     id: 'TRF-3002',
     requestingLab: 'IoT & Embedded Systems Lab',
+    requestingLabId: 'LAB-IOT',
     owningLab: 'Computer & AI Research Lab',
+    owningLabId: 'LAB-CS',
     equipmentId: 'EQ-1010',
     equipmentName: 'Oculus Quest 2 VR Headset 256GB',
     requestedBy: 'Marcus Brody',
@@ -405,26 +507,52 @@ export const INITIAL_TRANSFERS = [
 export const INITIAL_NOTIFICATIONS = [
   {
     id: 'NTF-1',
-    title: 'Equipment Overdue Notice',
-    message: 'Tektronix Oscilloscope (EQ-1003) issued to Prof. Eleanor Vance was due on Aug 05.',
-    timestamp: '10 mins ago',
-    type: 'warning',
+    title: 'Bulk Equipment Import Completed',
+    message: '23 new sensor & oscilloscope units registered across IoT & VLSI Labs.',
+    timestamp: '15 mins ago',
+    type: 'success',
+    category: 'bulk_import',
+    targetRoles: ['admin', 'assistant'],
     read: false
   },
   {
     id: 'NTF-2',
-    title: 'New Equipment Request',
-    message: 'Alex Johnson submitted a request for 2x ESP32 NodeMCU.',
-    timestamp: '2 hours ago',
+    title: 'Club & Event Batch Issue: Hackathon 2026',
+    message: 'Robotics Club checked out 12x microcontrollers & 3D printers for Annual University Hackathon.',
+    timestamp: '1 hour ago',
     type: 'info',
+    category: 'bulk_event_issue',
+    targetRoles: ['admin', 'assistant', 'faculty'],
     read: false
   },
   {
     id: 'NTF-3',
-    title: 'Inter-Lab Transfer Approved',
-    message: 'Transfer of Oculus Quest 2 VR Headset from AI Lab to IoT Lab was approved.',
+    title: 'New Hardware Model Added',
+    message: 'Rigol DS1054Z Digital Oscilloscope (10 units) added to Electronics & VLSI Lab.',
+    timestamp: '3 hours ago',
+    type: 'info',
+    category: 'equipment_addition',
+    targetRoles: ['admin', 'assistant'],
+    read: false
+  },
+  {
+    id: 'NTF-4',
+    title: 'Equipment Return Reminder',
+    message: 'Raspberry Pi 4 Model B (LT-IOT-SBC-00001) is due on Aug 14.',
     timestamp: '1 day ago',
-    type: 'success',
+    type: 'warning',
+    category: 'single_issue',
+    targetRoles: ['assistant', 'student'],
+    read: false
+  },
+  {
+    id: 'NTF-5',
+    title: 'Inter-Lab Transfer Initialized',
+    message: 'Transfer request: 1x Tektronix Oscilloscope from VLSI Lab to Robotics Lab.',
+    timestamp: '2 days ago',
+    type: 'info',
+    category: 'inter_lab_transfer',
+    targetRoles: ['admin', 'assistant', 'faculty'],
     read: true
   }
 ];
@@ -440,7 +568,7 @@ export const SMART_PROCUREMENT_DATA = [
     predictedDemand: 42,
     recommendedPurchase: 20,
     confidenceScore: '94%',
-    aiReasoning: 'High demand anticipated for upcoming Fall Capstone IoT projects based on past semester registration trends.'
+    aiReasoning: 'High demand anticipated for upcoming Fall Capstone IoT projects based on course enrollment trends.'
   },
   {
     id: 'PRC-2',
@@ -452,7 +580,7 @@ export const SMART_PROCUREMENT_DATA = [
     predictedDemand: 35,
     recommendedPurchase: 22,
     confidenceScore: '91%',
-    aiReasoning: 'Current available stock is critically low (4 units). High course enrollment in Embedded AI.'
+    aiReasoning: 'Current available stock is critically low (4 units). High course enrollment in Embedded Systems.'
   },
   {
     id: 'PRC-3',
@@ -464,7 +592,7 @@ export const SMART_PROCUREMENT_DATA = [
     predictedDemand: 18,
     recommendedPurchase: 0,
     confidenceScore: '88%',
-    aiReasoning: 'Stock level adequate for next 60 days. Maintenance backlog requires attention instead of new purchase.'
+    aiReasoning: 'Stock level adequate for next 60 days. Regular calibration recommended.'
   },
   {
     id: 'PRC-4',
@@ -476,17 +604,17 @@ export const SMART_PROCUREMENT_DATA = [
     predictedDemand: 55,
     recommendedPurchase: 30,
     confidenceScore: '96%',
-    aiReasoning: 'Consumable project kit with high turnover during Wireless Networks semester module.'
+    aiReasoning: 'Consumable project kit with high turnover during Wireless Sensor Networks semester module.'
   }
 ];
 
 export const REPORT_ANALYTICS_DATA = {
   summaryStats: {
-    totalEquipment: 540,
-    available: 412,
-    borrowed: 98,
-    overdue: 30,
-    pendingRequests: 17,
+    totalEquipment: 133,
+    available: 95,
+    borrowed: 38,
+    overdue: 2,
+    pendingRequests: 2,
     totalLabs: 4
   },
   monthlyBorrowingTrends: [
@@ -500,10 +628,10 @@ export const REPORT_ANALYTICS_DATA = {
     { month: 'Aug', count: 110 }
   ],
   labUtilization: [
-    { labName: 'IoT Lab', utilization: 78, total: 145 },
-    { labName: 'Electronics Lab', utilization: 65, total: 180 },
-    { labName: 'Robotics Lab', utilization: 84, total: 115 },
-    { labName: 'Computer AI Lab', utilization: 58, total: 100 }
+    { labName: 'IoT Lab', utilization: 78, total: 70 },
+    { labName: 'Electronics Lab', utilization: 65, total: 50 },
+    { labName: 'Robotics Lab', utilization: 84, total: 7 },
+    { labName: 'Computer AI Lab', utilization: 58, total: 6 }
   ],
   mostUsedEquipment: [
     { name: 'Arduino Uno R3 Kit', totalIssues: 142, category: 'Microcontrollers' },

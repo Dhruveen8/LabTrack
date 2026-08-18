@@ -1,30 +1,43 @@
 import React from 'react';
-import { QrCode } from 'lucide-react';
+import { QRCodeSVG } from 'qrcode.react';
 
-export const QRCodeDisplay = ({ value, title = 'Equipment QR Code', size = 120 }) => {
+export const QRCodeDisplay = ({ value, title = 'Equipment QR Code', size = 130, subtitle = '' }) => {
   return (
-    <div style={{ display: 'inline-flex', flexDirection: 'column', alignItems: 'center', padding: '1rem', border: '1px solid #e2e8f0', borderRadius: '8px', backgroundColor: '#ffffff' }}>
+    <div
+      style={{
+        display: 'inline-flex',
+        flexDirection: 'column',
+        alignItems: 'center',
+        padding: '1rem',
+        border: '1px solid #e2e8f0',
+        borderRadius: '8px',
+        backgroundColor: '#ffffff',
+        boxShadow: '0 1px 3px rgba(0,0,0,0.05)'
+      }}
+    >
       <div
         style={{
-          width: `${size}px`,
-          height: `${size}px`,
-          backgroundColor: '#0f172a',
-          borderRadius: '6px',
-          display: 'flex',
-          flexDirection: 'column',
-          alignItems: 'center',
-          justifyContent: 'center',
-          color: '#ffffff',
           padding: '8px',
-          boxShadow: 'inset 0 0 10px rgba(255,255,255,0.1)'
+          backgroundColor: '#ffffff',
+          borderRadius: '6px',
+          border: '1px solid #cbd5e1',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center'
         }}
       >
-        <QrCode size={size * 0.7} color="#ffffff" />
+        <QRCodeSVG
+          value={value || 'LT-GEN-00000'}
+          size={size}
+          level="H"
+          includeMargin={false}
+        />
       </div>
-      <div style={{ fontSize: '0.8rem', fontWeight: 700, color: '#0f172a', marginTop: '0.5rem' }}>
+      <div style={{ fontSize: '0.85rem', fontWeight: 700, color: '#0f172a', marginTop: '0.65rem', fontFamily: 'monospace' }}>
         {value || 'N/A'}
       </div>
-      <div style={{ fontSize: '0.7rem', color: '#64748b' }}>{title}</div>
+      <div style={{ fontSize: '0.75rem', color: '#475569', fontWeight: 600 }}>{title}</div>
+      {subtitle && <div style={{ fontSize: '0.7rem', color: '#94a3b8', marginTop: '2px' }}>{subtitle}</div>}
     </div>
   );
 };

@@ -6,11 +6,11 @@ import { CalendarCheck, Plus, Trash2, CheckCircle2 } from 'lucide-react';
 
 export const EventIssuePage = () => {
   const navigate = useNavigate();
-  const { useToast } = useLabTrack();
+  const { issueEventAction } = useLabTrack();
 
-  const [eventName, setEventName] = useState('RoboWars 2024 University Workshop');
+  const [eventName, setEventName] = useState('RoboWars 2026 University Hackathon');
   const [coordinator, setCoordinator] = useState('Prof. Eleanor Vance');
-  const [purpose, setPurpose] = useState('Inter-department robotics competition hardware setup');
+  const [purpose, setPurpose] = useState('Inter-department robotics competition & fast prototyping track');
   const [issueDate, setIssueDate] = useState('2026-08-15');
   const [returnDate, setReturnDate] = useState('2026-08-20');
 
@@ -31,45 +31,89 @@ export const EventIssuePage = () => {
     setItems(items.filter((_, i) => i !== index));
   };
 
-  const handleConfirm = () => {
-    alert(`Event equipment issue recorded for "${eventName}" (${totalQty} total items).`);
+  const handleConfirm = async () => {
+    await issueEventAction({
+      eventName,
+      coordinator,
+      purpose,
+      issueDate,
+      returnDate,
+      totalQty,
+      items
+    });
     navigate('/transactions');
   };
 
   return (
     <div>
-      <PageHeader title="Multiple Equipment / Event Issue Portal" subtitle="Issue bulk laboratory hardware for workshops, club hackathons, or university events" />
+      <PageHeader
+        title="Multiple Equipment / Club / Event Issue Portal"
+        subtitle="Issue bulk laboratory hardware batches for workshops, club hackathons, or university events (Notifies Admin & Faculty)"
+      />
       <div className="portal-card" style={{ maxWidth: '800px' }}>
         <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem' }}>
           <div className="form-group">
             <label className="form-label">Club / Event Name</label>
-            <input type="text" className="form-control" value={eventName} onChange={(e) => setEventName(e.target.value)} />
+            <input
+              type="text"
+              className="form-control"
+              value={eventName}
+              onChange={(e) => setEventName(e.target.value)}
+              placeholder="e.g. Annual Robotics Hackathon"
+              required
+            />
           </div>
           <div className="form-group">
             <label className="form-label">Faculty Coordinator</label>
-            <input type="text" className="form-control" value={coordinator} onChange={(e) => setCoordinator(e.target.value)} />
+            <input
+              type="text"
+              className="form-control"
+              value={coordinator}
+              onChange={(e) => setCoordinator(e.target.value)}
+              placeholder="e.g. Prof. Eleanor Vance"
+              required
+            />
           </div>
         </div>
 
         <div className="form-group">
           <label className="form-label">Event Purpose / Objectives</label>
-          <input type="text" className="form-control" value={purpose} onChange={(e) => setPurpose(e.target.value)} />
+          <input
+            type="text"
+            className="form-control"
+            value={purpose}
+            onChange={(e) => setPurpose(e.target.value)}
+            placeholder="e.g. Hardware setup for inter-departmental competition"
+            required
+          />
         </div>
 
         <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem' }}>
           <div className="form-group">
             <label className="form-label">Issue Date</label>
-            <input type="date" className="form-control" value={issueDate} onChange={(e) => setIssueDate(e.target.value)} />
+            <input
+              type="date"
+              className="form-control"
+              value={issueDate}
+              onChange={(e) => setIssueDate(e.target.value)}
+              required
+            />
           </div>
           <div className="form-group">
             <label className="form-label">Expected Return Date</label>
-            <input type="date" className="form-control" value={returnDate} onChange={(e) => setReturnDate(e.target.value)} />
+            <input
+              type="date"
+              className="form-control"
+              value={returnDate}
+              onChange={(e) => setReturnDate(e.target.value)}
+              required
+            />
           </div>
         </div>
 
         <div style={{ marginTop: '1.25rem', paddingTop: '1rem', borderTop: '1px solid #e2e8f0' }}>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.75rem' }}>
-            <h4 style={{ fontSize: '0.95rem', fontWeight: 700, margin: 0 }}>Requested Hardware Equipment List</h4>
+            <h4 style={{ fontSize: '0.95rem', fontWeight: 700, margin: 0 }}>Allocated Hardware Equipment List</h4>
             <button type="button" className="btn btn-secondary btn-sm" onClick={handleAddItem}>
               <Plus size={14} /> Add Item Row
             </button>
@@ -114,8 +158,8 @@ export const EventIssuePage = () => {
         </div>
 
         <div style={{ marginTop: '1.5rem' }}>
-          <button className="btn btn-primary" onClick={handleConfirm}>
-            <CheckCircle2 size={16} /> Confirm Event Equipment Issue
+          <button className="btn btn-primary" onClick={handleConfirm} style={{ width: '100%' }}>
+            <CheckCircle2 size={16} /> Confirm Event Equipment Issue & Notify Stakeholders
           </button>
         </div>
       </div>

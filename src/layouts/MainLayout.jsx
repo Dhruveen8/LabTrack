@@ -37,7 +37,17 @@ export const MainLayout = ({ children }) => {
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [showNotifications, setShowNotifications] = useState(false);
 
-  const unreadCount = notificationsList.filter(n => !n.read).length;
+  const role = user?.role || 'student';
+  const roleNotifications = notificationsList.filter(n => {
+    if (n.targetRoles && n.targetRoles.length > 0 && !n.targetRoles.includes(role)) return false;
+    if (role === 'admin') {
+      const allowed = ['equipment_addition', 'bulk_import', 'bulk_event_issue', 'inter_lab_transfer', 'system'];
+      if (n.category && !allowed.includes(n.category)) return false;
+    }
+    return true;
+  });
+
+  const unreadCount = roleNotifications.filter(n => !n.read).length;
 
   const handleLogout = () => {
     logout();

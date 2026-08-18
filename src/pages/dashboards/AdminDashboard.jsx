@@ -5,24 +5,24 @@ import { StatCard } from '../../components/common/StatCard';
 import { DataTable } from '../../components/common/DataTable';
 import { StatusBadge } from '../../components/common/StatusBadge';
 import { Link } from 'react-router-dom';
-import { Package, CheckCircle, Clock, AlertTriangle, FileSpreadsheet, Building2, Plus, Upload, BarChart, ArrowRight } from 'lucide-react';
+import { Package, CheckCircle, Clock, AlertTriangle, FileSpreadsheet, Building2, Users, BarChart, ArrowRight, BrainCircuit } from 'lucide-react';
 import { BarChart as ReBarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, PieChart, Pie, Cell } from 'recharts';
 
 export const AdminDashboard = () => {
-  const { equipmentList, labsList, transactionsList, requestsList } = useLabTrack();
+  const { equipmentList, labsList, departmentsList, transactionsList, requestsList } = useLabTrack();
 
-  const totalEquipment = equipmentList.reduce((acc, item) => acc + (parseInt(item.quantity, 10) || 0), 0) || 540;
-  const available = equipmentList.reduce((acc, item) => acc + (parseInt(item.availableQuantity, 10) || 0), 0) || 412;
-  const borrowed = equipmentList.reduce((acc, item) => acc + (parseInt(item.borrowedQuantity, 10) || 0), 0) || 98;
-  const overdueCount = transactionsList.filter(t => t.status === 'Overdue').length || 30;
-  const pendingReqs = requestsList.filter(r => r.status === 'Pending').length || 17;
+  const totalEquipment = equipmentList.reduce((acc, item) => acc + (parseInt(item.quantity, 10) || 0), 0);
+  const available = equipmentList.reduce((acc, item) => acc + (parseInt(item.availableQuantity, 10) || 0), 0);
+  const borrowed = equipmentList.reduce((acc, item) => acc + (parseInt(item.borrowedQuantity, 10) || 0), 0);
+  const overdueCount = transactionsList.filter(t => t.status === 'Overdue').length;
+  const pendingReqs = requestsList.filter(r => r.status === 'Pending').length;
 
   // Chart Data
   const labChartData = labsList.map(lab => ({
     name: lab.name.replace('Lab', '').trim(),
     Available: lab.available,
     Borrowed: lab.borrowed,
-    Maintenance: lab.maintenance
+    Maintenance: lab.maintenance || 0
   }));
 
   const pieData = [
@@ -32,8 +32,20 @@ export const AdminDashboard = () => {
   ];
 
   const transactionColumns = [
-    { header: 'TXN ID', accessor: 'id' },
-    { header: 'Equipment', accessor: 'equipmentName' },
+    {
+      header: 'TXN ID',
+      accessor: 'id',
+      cell: (row) => <span style={{ fontWeight: 700, fontFamily: 'monospace' }}>{row.id}</span>
+    },
+    {
+      header: 'Asset & Model',
+      cell: (row) => (
+        <div>
+          <div style={{ fontWeight: 600 }}>{row.equipmentName}</div>
+          <div style={{ fontSize: '0.75rem', fontFamily: 'monospace', color: '#1e40af' }}>{row.unitAssetId || row.equipmentId}</div>
+        </div>
+      )
+    },
     { header: 'Borrower', accessor: 'borrowerName' },
     { header: 'Lab', accessor: 'originLab' },
     { header: 'Due Date', accessor: 'dueDate' },
@@ -46,15 +58,15 @@ export const AdminDashboard = () => {
   return (
     <div>
       <PageHeader
-        title="University Equipment Overview"
-        subtitle="System-wide administration metrics across all department laboratories"
+        title="University Laboratory System Administration"
+        subtitle="Institution-wide department oversight, facility management, and asset utilization analytics"
         actions={
           <div style={{ display: 'flex', gap: '0.5rem' }}>
-            <Link to="/equipment/add" className="btn btn-primary btn-sm">
-              <Plus size={14} /> Add Equipment
+            <Link to="/labs" className="btn btn-primary btn-sm">
+              <Building2 size={14} /> Manage Laboratories ({labsList.length})
             </Link>
-            <Link to="/bulk-import" className="btn btn-secondary btn-sm">
-              <Upload size={14} /> Bulk Import
+            <Link to="/users" className="btn btn-secondary btn-sm">
+              <Users size={14} /> Assign Assistants
             </Link>
           </div>
         }
@@ -62,12 +74,12 @@ export const AdminDashboard = () => {
 
       {/* KPI Stats Grid */}
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: '1rem', marginBottom: '1.5rem' }}>
-        <StatCard title="Total Equipment" value={totalEquipment} icon={Package} color="blue" subtext="Across all 4 labs" />
-        <StatCard title="Available" value={available} icon={CheckCircle} color="green" subtext="Ready for issue" />
-        <StatCard title="Borrowed" value={borrowed} icon={Clock} color="purple" subtext="Currently issued" />
-        <StatCard title="Overdue" value={overdueCount} icon={AlertTriangle} color="danger" subtext="Action required" />
-        <StatCard title="Pending Requests" value={pendingReqs} icon={FileSpreadsheet} color="warning" subtext="Awaiting review" />
-        <StatCard title="Active Labs" value={labsList.length || 4} icon={Building2} color="blue" subtext="Campus departments" />
+        <StatCard title="Total Registered Units" value={totalEquipment} icon={Package} color="blue" subtext={`Across ${labsList.length} laboratories`} />
+        <StatCard title="Available in Labs" value={available} icon={CheckCircle} color="green" subtext="Ready for checkout" />
+        <StatCard title="Currently Issued" value={borrowed} icon={Clock} color="purple" subtext="In active circulation" />
+        <StatCard title="Overdue Items" value={overdueCount} icon={AlertTriangle} color="danger" subtext="Follow-up required" />
+        <StatCard title="Active Laboratories" value={labsList.length} icon={Building2} color="blue" subtext={`In ${departmentsList.length} departments`} />
+        <StatCard title="Pending Requests" value={pendingReqs} icon={FileSpreadsheet} color="warning" subtext="Delegated to Assistants" />
       </div>
 
       {/* Analytics Visualizations Section */}
@@ -76,8 +88,8 @@ export const AdminDashboard = () => {
         <div className="portal-card" style={{ marginBottom: 0 }}>
           <div className="portal-header" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
             <div>
-              <div className="portal-title">Lab-wise Equipment Distribution</div>
-              <div className="portal-subtitle">Comparison of inventory states by laboratory unit</div>
+              <div className="portal-title">Department Laboratory Equipment Distribution</div>
+              <div className="portal-subtitle">Comparison of inventory states across facilities</div>
             </div>
             <BarChart size={18} style={{ color: '#64748b' }} />
           </div>
@@ -99,8 +111,8 @@ export const AdminDashboard = () => {
         {/* Global Inventory Proportion Pie Chart */}
         <div className="portal-card" style={{ marginBottom: 0 }}>
           <div className="portal-header">
-            <div className="portal-title">Inventory Allocation</div>
-            <div className="portal-subtitle">Status proportions</div>
+            <div className="portal-title">Campus Asset Allocation</div>
+            <div className="portal-subtitle">Live status proportions</div>
           </div>
           <div style={{ width: '100%', height: '180px' }}>
             <ResponsiveContainer width="100%" height="100%">
@@ -125,12 +137,12 @@ export const AdminDashboard = () => {
         </div>
       </div>
 
-      {/* Recent Activity & Quick Action Row */}
+      {/* Recent Activity */}
       <div className="portal-card">
         <div className="portal-header" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
           <div>
             <div className="portal-title">Recent Equipment Transactions</div>
-            <div className="portal-subtitle">Latest borrowing & issue records across campus</div>
+            <div className="portal-subtitle">Campus-wide circulation and issue records</div>
           </div>
           <Link to="/transactions" style={{ fontSize: '0.8rem', fontWeight: 600, display: 'flex', alignItems: 'center', gap: '4px' }}>
             View All Transactions <ArrowRight size={14} />

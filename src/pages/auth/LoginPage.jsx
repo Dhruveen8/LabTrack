@@ -214,7 +214,7 @@ export const LoginPage = () => {
         </div>
 
         <div style={{ padding: '0.75rem', backgroundColor: '#f8fafc', borderTop: '1px solid #e2e8f0', textAlign: 'center', fontSize: '0.75rem', color: '#64748b' }}>
-          University Information Technology Services © 2024–2025
+          University Information Technology Services © 2026–2027
         </div>
       </div>
     </div>

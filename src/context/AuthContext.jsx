@@ -19,13 +19,19 @@ export const AuthProvider = ({ children }) => {
     setUser(null);
   };
 
-  const switchDemoRole = (role) => {
-    const newUser = authService.switchRole(role);
+  const switchDemoRole = async (role) => {
+    const newUser = await authService.switchRole(role);
     setUser(newUser);
+    return newUser;
+  };
+
+  const refreshUser = async () => {
+    const current = authService.getCurrentUser();
+    setUser(current);
   };
 
   return (
-    <AuthContext.Provider value={{ user, login, logout, switchDemoRole, isAuthenticated: !!user }}>
+    <AuthContext.Provider value={{ user, login, logout, switchDemoRole, refreshUser, isAuthenticated: !!user }}>
       {children}
     </AuthContext.Provider>
   );

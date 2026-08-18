@@ -1,12 +1,38 @@
 import React from 'react';
 import { useLabTrack } from '../../context/LabTrackContext';
-import { Bell, CheckCheck, Info, AlertTriangle, CheckCircle } from 'lucide-react';
+import { useAuth } from '../../context/AuthContext';
+import { Bell, CheckCheck, Info, AlertTriangle, CheckCircle, PackagePlus, CalendarCheck, ArrowRightLeft } from 'lucide-react';
 import { Link } from 'react-router-dom';
 
 export const NotificationPanel = ({ onClose }) => {
+  const { user } = useAuth();
   const { notificationsList, markNotificationRead, markAllNotificationsRead } = useLabTrack();
 
-  const getIcon = (type) => {
+  const role = user?.role || 'student';
+
+  // Filter notifications based on role policy
+  const visibleNotifications = notificationsList.filter(n => {
+    if (n.targetRoles && n.targetRoles.length > 0 && !n.targetRoles.includes(role)) {
+      return false;
+    }
+    // Admin policy: Admin only receives bulk imports, equipment additions, club/event issues, transfers
+    if (role === 'admin') {
+      const allowed = ['equipment_addition', 'bulk_import', 'bulk_event_issue', 'inter_lab_transfer', 'system'];
+      if (n.category && !allowed.includes(n.category)) return false;
+    }
+    return true;
+  });
+
+  const getIcon = (type, category) => {
+    if (category === 'bulk_import' || category === 'equipment_addition') {
+      return <PackagePlus size={16} color="#1d4ed8" />;
+    }
+    if (category === 'bulk_event_issue') {
+      return <CalendarCheck size={16} color="#7c3aed" />;
+    }
+    if (category === 'inter_lab_transfer') {
+      return <ArrowRightLeft size={16} color="#0891b2" />;
+    }
     switch (type) {
       case 'warning': return <AlertTriangle size={16} color="#b45309" />;
       case 'success': return <CheckCircle size={16} color="#15803d" />;
@@ -21,7 +47,7 @@ export const NotificationPanel = ({ onClose }) => {
         right: 0,
         top: '100%',
         marginTop: '8px',
-        width: '340px',
+        width: '360px',
         backgroundColor: '#ffffff',
         border: '1px solid #e2e8f0',
         borderRadius: '8px',
@@ -41,7 +67,7 @@ export const NotificationPanel = ({ onClose }) => {
         }}
       >
         <div style={{ display: 'flex', alignItems: 'center', gap: '0.35rem', fontWeight: 600, fontSize: '0.875rem' }}>
-          <Bell size={16} /> Notifications
+          <Bell size={16} /> Notifications {role === 'admin' ? '(Executive)' : ''}
         </div>
         <button
           onClick={markAllNotificationsRead}
@@ -51,9 +77,9 @@ export const NotificationPanel = ({ onClose }) => {
         </button>
       </div>
 
-      <div style={{ maxHeight: '300px', overflowY: 'auto' }}>
-        {notificationsList.length > 0 ? (
-          notificationsList.map(n => (
+      <div style={{ maxHeight: '320px', overflowY: 'auto' }}>
+        {visibleNotifications.length > 0 ? (
+          visibleNotifications.map(n => (
             <div
               key={n.id}
               onClick={() => markNotificationRead(n.id)}
@@ -66,7 +92,7 @@ export const NotificationPanel = ({ onClose }) => {
               }}
             >
               <div style={{ display: 'flex', alignItems: 'flex-start', gap: '0.5rem' }}>
-                <div style={{ marginTop: '2px' }}>{getIcon(n.type)}</div>
+                <div style={{ marginTop: '2px' }}>{getIcon(n.type, n.category)}</div>
                 <div style={{ flex: 1 }}>
                   <div style={{ fontSize: '0.8rem', fontWeight: 600, color: '#0f172a' }}>{n.title}</div>
                   <div style={{ fontSize: '0.75rem', color: '#475569', marginTop: '2px' }}>{n.message}</div>

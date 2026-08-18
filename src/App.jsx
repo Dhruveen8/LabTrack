@@ -25,6 +25,7 @@ import { BulkImportPage } from './pages/operations/BulkImportPage';
 import { LabsListPage } from './pages/labs/LabsListPage';
 import { RequestsListPage } from './pages/requests/RequestsListPage';
 import { RequestEquipmentPage } from './pages/requests/RequestEquipmentPage';
+import { ExtendRequestPage } from './pages/requests/ExtendRequestPage';
 import { InterLabTransfersPage } from './pages/requests/InterLabTransfersPage';
 import { TransactionsListPage } from './pages/transactions/TransactionsListPage';
 
@@ -96,9 +97,9 @@ export function App() {
               <Route path="/equipment/:id" element={<ProtectedRoute allowedRoles={['admin', 'assistant', 'faculty', 'student']}><EquipmentDetailPage /></ProtectedRoute>} />
               <Route path="/browse-equipment" element={<ProtectedRoute allowedRoles={['admin', 'assistant', 'faculty', 'student']}><BrowseEquipmentPage /></ProtectedRoute>} />
 
-              {/* Operations Pages */}
-              <Route path="/issue-equipment" element={<ProtectedRoute allowedRoles={['admin', 'assistant']}><IssueEquipmentPage /></ProtectedRoute>} />
-              <Route path="/return-equipment" element={<ProtectedRoute allowedRoles={['admin', 'assistant']}><ReturnEquipmentPage /></ProtectedRoute>} />
+              {/* Operations Pages (Counter issue/return exclusive to Lab Assistant) */}
+              <Route path="/issue-equipment" element={<ProtectedRoute allowedRoles={['assistant']}><IssueEquipmentPage /></ProtectedRoute>} />
+              <Route path="/return-equipment" element={<ProtectedRoute allowedRoles={['assistant']}><ReturnEquipmentPage /></ProtectedRoute>} />
               <Route path="/event-issue" element={<ProtectedRoute allowedRoles={['admin', 'assistant', 'faculty']}><EventIssuePage /></ProtectedRoute>} />
               <Route path="/bulk-import" element={<ProtectedRoute allowedRoles={['admin', 'assistant']}><BulkImportPage /></ProtectedRoute>} />
 
@@ -106,6 +107,7 @@ export function App() {
               <Route path="/labs" element={<ProtectedRoute allowedRoles={['admin', 'assistant', 'faculty', 'student']}><LabsListPage /></ProtectedRoute>} />
               <Route path="/requests" element={<ProtectedRoute allowedRoles={['admin', 'assistant', 'faculty', 'student']}><RequestsListPage /></ProtectedRoute>} />
               <Route path="/request-equipment" element={<ProtectedRoute allowedRoles={['admin', 'assistant', 'faculty', 'student']}><RequestEquipmentPage /></ProtectedRoute>} />
+              <Route path="/extend-request/:transactionId" element={<ProtectedRoute allowedRoles={['admin', 'assistant', 'faculty', 'student']}><ExtendRequestPage /></ProtectedRoute>} />
               <Route path="/inter-lab-transfers" element={<ProtectedRoute allowedRoles={['admin', 'assistant', 'faculty']}><InterLabTransfersPage /></ProtectedRoute>} />
               <Route path="/transactions" element={<ProtectedRoute allowedRoles={['admin', 'assistant', 'faculty', 'student']}><TransactionsListPage /></ProtectedRoute>} />
 

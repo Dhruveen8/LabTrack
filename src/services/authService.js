@@ -1,13 +1,14 @@
+import { userService } from './userService';
 import { INITIAL_USERS } from '../data/mockData';
 
 const AUTH_KEY = 'labtrack_auth_user';
 
 export const authService = {
   login: async (universityIdOrEmail, password, selectedRole) => {
-    // Frontend mock authentication simulation
-    const user = INITIAL_USERS.find(
-      u => u.role === selectedRole || u.email.toLowerCase() === universityIdOrEmail.toLowerCase()
-    ) || INITIAL_USERS.find(u => u.role === selectedRole) || INITIAL_USERS[0];
+    const allUsers = await userService.getAll();
+    const user = allUsers.find(
+      u => u.role === selectedRole || (universityIdOrEmail && u.email.toLowerCase() === universityIdOrEmail.toLowerCase())
+    ) || allUsers.find(u => u.role === selectedRole) || allUsers[0];
 
     localStorage.setItem(AUTH_KEY, JSON.stringify(user));
     return { success: true, user };
@@ -28,8 +29,9 @@ export const authService = {
     }
   },
 
-  switchRole: (role) => {
-    const user = INITIAL_USERS.find(u => u.role === role) || INITIAL_USERS[0];
+  switchRole: async (role) => {
+    const allUsers = await userService.getAll();
+    const user = allUsers.find(u => u.role === role) || allUsers[0];
     localStorage.setItem(AUTH_KEY, JSON.stringify(user));
     return user;
   }
