@@ -1,4 +1,5 @@
-import React, { createContext, useContext, useState, useEffect } from 'react';
+import React, { createContext, useContext, useState, useEffect, useCallback } from 'react';
+import { useAuth } from './AuthContext';
 import { departmentService } from '../services/departmentService';
 import { equipmentService } from '../services/equipmentService';
 import { labService } from '../services/labService';
@@ -30,7 +31,13 @@ export const LabTrackProvider = ({ children }) => {
   });
   const [loading, setLoading] = useState(true);
 
-  const refreshData = async () => {
+  const { isAuthenticated } = useAuth();
+
+  const refreshData = useCallback(async () => {
+    if (!isAuthenticated) {
+      setLoading(false);
+      return;
+    }
     try {
       const [depts, eq, labs, reqs, trfs, txns, notifs, users, settings] = await Promise.all([
         departmentService.getAll(),
@@ -43,12 +50,42 @@ export const LabTrackProvider = ({ children }) => {
         userService.getAll(),
         settingsService.get()
       ]);
+
+      // Enrich requests with user/equipment/lab names for the UI
+      const enrichedReqs = reqs.map(req => {
+        const user = users.find(u => u.id === req.requesterId) || {};
+        const eqItem = eq.find(e => e.id === req.equipmentId) || {};
+        const lab = labs.find(l => l.id === req.labId) || {};
+        return {
+          ...req,
+          requesterName: req.requesterName || user.name || 'Unknown User',
+          requesterRole: req.requesterRole || user.role || 'unknown',
+          equipmentName: req.equipmentName || eqItem.name || 'Unknown Equipment',
+          labName: req.labName || lab.name || 'Unknown Lab',
+          originLab: req.originLab || lab.name || 'Unknown Lab'
+        };
+      });
+
+      // Enrich transactions with user/equipment/lab names for the UI
+      const enrichedTxns = txns.map(txn => {
+        const user = users.find(u => u.id === txn.borrowerId) || {};
+        const req = enrichedReqs.find(r => r.id === txn.requestId) || {};
+        return {
+          ...txn,
+          borrowerName: txn.borrowerName || user.name || 'Unknown User',
+          borrowerType: txn.borrowerType || (user.role ? user.role.toLowerCase() : 'unknown'),
+          equipmentId: txn.equipmentId || req.equipmentId,
+          equipmentName: txn.equipmentName || req.equipmentName || 'Unknown Equipment',
+          originLab: txn.originLab || req.originLab || 'Unknown Lab'
+        };
+      });
+
       setDepartmentsList(depts);
       setEquipmentList(eq);
       setLabsList(labs);
-      setRequestsList(reqs);
+      setRequestsList(enrichedReqs);
       setTransfersList(trfs);
-      setTransactionsList(txns);
+      setTransactionsList(enrichedTxns);
       setNotificationsList(notifs);
       setUsersList(users);
       if (settings) setSystemSettings(settings);
@@ -57,11 +94,11 @@ export const LabTrackProvider = ({ children }) => {
     } finally {
       setLoading(false);
     }
-  };
+  }, [isAuthenticated]);
 
   useEffect(() => {
     refreshData();
-  }, []);
+  }, [isAuthenticated, refreshData]);
 
   // System Settings (Admin can modify borrowing limits)
   const updateSystemSettingsAction = async (newSettings) => {
@@ -243,9 +280,11 @@ export const LabTrackProvider = ({ children }) => {
 
     // 3. Update Request status to 'Issued' with unitAssetId link
     if (requestId) {
-      const updatedReq = await requestService.updateRequestStatus(requestId, 'Issued', { unitAssetId });
-      setRequestsList(prev => prev.map(r => r.id === requestId ? updatedReq : r));
+      await requestService.updateRequestStatus(requestId, 'Issued', { unitAssetId });
     }
+
+    // Call refreshData to ensure all UI states (including enriched names/titles) sync perfectly
+    await refreshData();
 
     // Single item checkout alert (Assistant & Student/Faculty only - NOT Admin)
     const notif = await notificationService.addNotification({
@@ -262,8 +301,8 @@ export const LabTrackProvider = ({ children }) => {
   };
 
   // Return Equipment Action (Single return - Assistant & Borrower only)
-  const returnEquipmentAction = async (transactionId, condition, remarks) => {
-    const updatedTxn = await transactionService.returnEquipment(transactionId, condition, remarks);
+  const returnEquipmentAction = async (transactionId, assetId, condition, remarks) => {
+    const updatedTxn = await transactionService.returnEquipment(transactionId, assetId, condition, remarks);
     setTransactionsList(prev => prev.map(t => t.id === transactionId ? updatedTxn : t));
 
     if (updatedTxn) {
@@ -277,9 +316,11 @@ export const LabTrackProvider = ({ children }) => {
 
       // 2. Mark request as 'Returned'
       if (updatedTxn.requestId) {
-        const updatedReq = await requestService.updateRequestStatus(updatedTxn.requestId, 'Returned');
-        setRequestsList(prev => prev.map(r => r.id === updatedTxn.requestId ? updatedReq : r));
+        await requestService.updateRequestStatus(updatedTxn.requestId, 'Returned');
       }
+
+      // Sync all lists from backend to preserve UI fields
+      await refreshData();
 
       // Single item return alert
       const notif = await notificationService.addNotification({
@@ -298,8 +339,34 @@ export const LabTrackProvider = ({ children }) => {
 
   // Request Actions (Students/Faculty create, Assistant approves/rejects)
   const createRequestAction = async (data) => {
-    const newReq = await requestService.createRequest(data);
-    setRequestsList(prev => [newReq, ...prev]);
+    // Ensure dates are ISO datetimes (the date input gives "2026-09-20", backend needs "2026-09-20T00:00:00")
+    const enrichedData = {
+      ...data,
+      modelId: data.equipmentId,
+      requiredFrom: data.requiredFrom ? new Date(data.requiredFrom).toISOString() : new Date().toISOString(),
+      requiredUntil: data.requiredUntil ? new Date(data.requiredUntil).toISOString() : undefined
+    };
+
+    const newReq = await requestService.createRequest(enrichedData);
+    
+    // Enrich the raw backend response with display names for the UI
+    const enrichedReq = {
+      ...newReq,
+      id: newReq.id,
+      requesterId: newReq.requesterId || newReq.requester_id,
+      requesterName: data.requesterName || 'Unknown User',
+      requesterRole: data.requesterRole || 'unknown',
+      equipmentId: newReq.equipmentId || newReq.model_id || data.equipmentId,
+      equipmentName: data.equipmentName || 'Unknown Equipment',
+      labId: newReq.labId || newReq.lab_id || data.labId,
+      labName: data.labName || 'Unknown Lab',
+      originLab: data.labName || 'Unknown Lab',
+      requiredFrom: newReq.requiredFrom || newReq.required_from,
+      requiredUntil: newReq.requiredUntil || newReq.required_until,
+      status: newReq.status ? (newReq.status.charAt(0).toUpperCase() + newReq.status.slice(1).toLowerCase()) : 'Pending'
+    };
+    
+    setRequestsList(prev => [enrichedReq, ...prev]);
 
     const notif = await notificationService.addNotification({
       title: 'New Equipment Reservation Request',
@@ -311,12 +378,12 @@ export const LabTrackProvider = ({ children }) => {
     setNotificationsList(prev => [notif, ...prev]);
 
     addToast('Equipment reservation request submitted for Assistant review', 'success');
-    return newReq;
+    return enrichedReq;
   };
 
   const updateRequestStatusAction = async (id, status) => {
     const updated = await requestService.updateRequestStatus(id, status);
-    setRequestsList(prev => prev.map(r => r.id === id ? updated : r));
+    await refreshData();
     if (status === 'Approved') {
       addToast(`Request ${id} approved! Ready for borrower physical pickup & QR scan.`, 'success');
     } else {

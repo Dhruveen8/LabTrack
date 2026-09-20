@@ -31,8 +31,8 @@ export const IssueEquipmentPage = () => {
 
     // Find APPROVED requests for this borrower in assistant's assigned labs
     const approved = requestsList.filter(req => {
-      const matchBorrower = req.requesterId?.toLowerCase() === cleanId.toLowerCase() ||
-                            req.requesterName?.toLowerCase().includes(cleanId.toLowerCase());
+      const matchBorrower = String(req.requesterId || '').toLowerCase() === cleanId.toLowerCase() ||
+                            String(req.requesterName || '').toLowerCase().includes(cleanId.toLowerCase());
       const matchStatus = req.status === 'Approved';
       const matchLab = isAllLabs || assignedLabIds.includes(req.labId);
       return matchBorrower && matchStatus && matchLab;
@@ -84,7 +84,7 @@ export const IssueEquipmentPage = () => {
     // Fallback if scanned QR is the equipment ID or generic code
     if (!matchedUnit && targetEq.units && targetEq.units.length > 0) {
       const availableUnit = targetEq.units.find(u => u.status === 'Available');
-      if (availableUnit && (targetEq.id.toLowerCase() === cleanQR.toLowerCase() || cleanQR.startsWith('LT-'))) {
+      if (availableUnit && (String(targetEq.id).toLowerCase() === cleanQR.toLowerCase() || cleanQR.startsWith('LT-'))) {
         matchedUnit = availableUnit;
         parentEquipment = targetEq;
       }

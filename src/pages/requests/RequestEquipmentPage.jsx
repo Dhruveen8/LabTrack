@@ -115,7 +115,7 @@ export const RequestEquipmentPage = () => {
             <select
               className="form-select"
               value={selectedEqId}
-              onChange={(e) => setSelectedEqId(e.target.value)}
+              onChange={(e) => setSelectedEqId(parseInt(e.target.value, 10))}
             >
               {equipmentList.map(eq => (
                 <option key={eq.id} value={eq.id}>

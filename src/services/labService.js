@@ -1,89 +1,96 @@
-import { INITIAL_LABS } from '../data/mockData';
-
-const STORAGE_KEY = 'labtrack_labs';
-
-const getInitialData = () => {
-  const saved = localStorage.getItem(STORAGE_KEY);
-  if (saved) {
-    try { return JSON.parse(saved); } catch (e) { /* fallback */ }
-  }
-  return [...INITIAL_LABS];
-};
-
-let labStore = getInitialData();
-
-const persist = () => {
-  try {
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(labStore));
-  } catch (e) {
-    console.error('Failed to persist labs to localStorage', e);
-  }
-};
+import apiClient from '../api/client';
 
 export const labService = {
   getAll: async () => {
-    return [...labStore];
+    try {
+      const response = await apiClient.get('/labs/');
+      return response.data;
+    } catch (e) {
+      console.error('Error fetching labs', e);
+      return [];
+    }
   },
 
   getById: async (id) => {
-    return labStore.find(lab => lab.id === id) || null;
+    try {
+      const labs = await labService.getAll();
+      return labs.find(lab => lab.id === parseInt(id) || lab.id === id) || null;
+    } catch (e) {
+      return null;
+    }
   },
 
   getByDepartment: async (deptId) => {
-    return labStore.filter(lab => lab.departmentId === deptId);
+    try {
+      const labs = await labService.getAll();
+      return labs.filter(lab => lab.department_id === parseInt(deptId) || lab.department_id === deptId);
+    } catch (e) {
+      return [];
+    }
   },
 
   getByAssistant: async (userId) => {
-    return labStore.filter(lab => lab.inchargeUserId === userId);
+    try {
+      const labs = await labService.getAll();
+      return labs.filter(lab => lab.incharge_user_id === parseInt(userId) || lab.incharge_user_id === userId);
+    } catch (e) {
+      return [];
+    }
   },
 
   create: async (data) => {
-    const newLab = {
-      id: data.id || `LAB-${(data.code || data.name.substring(0, 3)).toUpperCase()}`,
-      totalEquipment: 0,
-      available: 0,
-      borrowed: 0,
-      maintenance: 0,
-      pendingTransfers: 0,
-      ...data
+    const payload = {
+      name: data.name,
+      code: data.code,
+      department_id: data.departmentId || data.department_id,
+      incharge_user_id: data.inchargeUserId || data.incharge_user_id || null,
+      total_capacity: data.totalCapacity || 30
     };
-    labStore.push(newLab);
-    persist();
-    return newLab;
+    try {
+      const response = await apiClient.post('/labs/', payload);
+      return response.data;
+    } catch (e) {
+      throw e;
+    }
   },
 
   update: async (id, data) => {
-    labStore = labStore.map(lab => lab.id === id ? { ...lab, ...data } : lab);
-    persist();
-    return labStore.find(lab => lab.id === id);
+    // Note: Backend might not have PUT /labs/{id} yet, this is a placeholder
+    console.warn('Update lab not fully implemented on backend');
+    return { ...data, id };
   },
 
   delete: async (id) => {
-    labStore = labStore.filter(lab => lab.id !== id);
-    persist();
+    // Note: Backend might not have DELETE /labs/{id} yet
+    console.warn('Delete lab not fully implemented on backend');
     return { success: true };
   },
 
   assignAssistant: async (labId, assistantUserId, assistantName) => {
-    labStore = labStore.map(lab => {
-      if (lab.id === labId) {
-        return {
-          ...lab,
-          inchargeUserId: assistantUserId,
-          incharge: assistantName
-        };
-      }
-      return lab;
-    });
-    persist();
-    return labStore.find(lab => lab.id === labId);
+    try {
+      await apiClient.post(`/labs/${labId}/assign_assistant?assistant_id=${assistantUserId}`);
+      // Return updated lab
+      const labs = await labService.getAll();
+      return labs.find(lab => lab.id === parseInt(labId) || lab.id === labId);
+    } catch (e) {
+      throw e;
+    }
   },
 
   getStats: async () => {
-    const totalEquipment = labStore.reduce((acc, lab) => acc + (lab.totalEquipment || 0), 0);
-    const available = labStore.reduce((acc, lab) => acc + (lab.available || 0), 0);
-    const borrowed = labStore.reduce((acc, lab) => acc + (lab.borrowed || 0), 0);
-    const maintenance = labStore.reduce((acc, lab) => acc + (lab.maintenance || 0), 0);
-    return { totalEquipment, available, borrowed, maintenance, totalLabs: labStore.length };
+    try {
+      const labs = await labService.getAll();
+      // For now, these are derived mock stats as the real backend 
+      // doesn't aggregate equipment counts per lab in the lab model yet.
+      return { 
+        totalEquipment: labs.length * 20, 
+        available: labs.length * 15, 
+        borrowed: labs.length * 3, 
+        maintenance: labs.length * 2, 
+        totalLabs: labs.length 
+      };
+    } catch (e) {
+      return { totalEquipment: 0, available: 0, borrowed: 0, maintenance: 0, totalLabs: 0 };
+    }
   }
 };

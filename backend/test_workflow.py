@@ -8,8 +8,11 @@ Usage (from /backend directory):
 Requirements: pip install httpx
 Backend must be running at http://localhost:8000
 """
-import httpx
 import sys
+import io
+# Force UTF-8 output on Windows so Unicode characters render correctly
+sys.stdout = io.TextIOWrapper(sys.stdout.buffer, encoding='utf-8', errors='replace')
+import httpx
 from datetime import datetime, timedelta
 
 BASE = "http://localhost:8000/api/v1"
@@ -21,7 +24,7 @@ FAIL = 0
 
 def log(step, msg, ok=True):
     global PASS, FAIL
-    icon = "✅" if ok else "❌"
+    icon = "[PASS]" if ok else "[FAIL]"
     if ok:
         PASS += 1
     else:
@@ -38,9 +41,9 @@ def expect(step, resp, expected_status, desc):
 
 
 def section(title):
-    print(f"\n{'─' * 60}")
+    print(f"\n{'=' * 60}")
     print(f"  {title}")
-    print(f"{'─' * 60}")
+    print(f"{'=' * 60}")
 
 
 # ─── Request Helpers ──────────────────────────────────────────────────────────
@@ -208,7 +211,7 @@ for lab_name in ["AI/ML Lab", "Networks Lab"]:
     expect("5", r, 200, f"Assign Amit → {lab_name}")
 
 priya_me = client.get(f"{BASE}/auth/me", headers=auth(priya_token)).json()
-print(f"  ℹ️  Priya assigned_labs: {priya_me.get('assigned_labs', [])}")
+print(f"  [INFO] Priya assigned_labs: {priya_me.get('assigned_labs', [])}")
 
 
 # ─── Step 6: Create Equipment Models (Admin) ─────────────────────────────────
@@ -312,14 +315,14 @@ for name, cat, lab_name, qty in equipment_models:
             log("7", f"Failed unit for {name}: {r.text}", ok=False)
 
 if iot_first_asset_id is None:
-    print("  ℹ️  Arduino units already existed — defaulting to LT-IOT-MC-00001")
+    print("  [INFO] Arduino units already existed -- defaulting to LT-IOT-MC-00001")
     iot_first_asset_id = "LT-IOT-MC-00001"
 
 arduino_model_id = model_ids["Arduino Uno R3"]
 vlsi_osc_model_id = model_ids["Tektronix TBS1052C Oscilloscope"]
 
-print(f"\n  ℹ️  Total new units created : {unit_total}")
-print(f"  ℹ️  First Arduino asset ID  : {iot_first_asset_id}")
+print(f"\n  [INFO] Total new units created : {unit_total}")
+print(f"  [INFO] First Arduino asset ID  : {iot_first_asset_id}")
 
 
 # ═══════════════════════════════════════════════════════════════════════════════

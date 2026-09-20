@@ -20,7 +20,7 @@ export const RequestsListPage = () => {
   if (isAssistant && assignedLabIds.length > 0) {
     visibleRequests = requestsList.filter(r => assignedLabIds.includes(r.labId));
   } else if (user?.role === 'student' || user?.role === 'faculty') {
-    visibleRequests = requestsList.filter(r => r.requesterId === user.universityId || r.requesterName === user.name);
+    visibleRequests = requestsList.filter(r => r.requesterId === user.id || r.requesterName === user.name);
   }
 
   // Apply tab filter

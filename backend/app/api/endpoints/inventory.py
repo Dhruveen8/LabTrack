@@ -88,3 +88,17 @@ async def create_equipment_unit(
     await db.commit()
     await db.refresh(unit)
     return unit
+
+@router.get("/units", response_model=List[EquipmentUnitResponse])
+async def list_equipment_units(db: AsyncSession = Depends(get_db)):
+    result = await db.execute(select(EquipmentUnit))
+    return result.scalars().all()
+
+@router.get("/units/{asset_id}", response_model=EquipmentUnitResponse)
+async def get_equipment_unit(asset_id: str, db: AsyncSession = Depends(get_db)):
+    result = await db.execute(select(EquipmentUnit).where(EquipmentUnit.asset_id == asset_id))
+    unit = result.scalars().first()
+    if not unit:
+        raise HTTPException(status_code=404, detail="Unit not found")
+    return unit
+

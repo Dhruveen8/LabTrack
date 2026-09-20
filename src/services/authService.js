@@ -1,17 +1,26 @@
-import { userService } from './userService';
-import { INITIAL_USERS } from '../data/mockData';
+import apiClient from '../api/client';
 
-const AUTH_KEY = 'labtrack_auth_user';
+const AUTH_KEY = 'labtrack_access_token';
 
 export const authService = {
-  login: async (universityIdOrEmail, password, selectedRole) => {
-    const allUsers = await userService.getAll();
-    const user = allUsers.find(
-      u => u.role === selectedRole || (universityIdOrEmail && u.email.toLowerCase() === universityIdOrEmail.toLowerCase())
-    ) || allUsers.find(u => u.role === selectedRole) || allUsers[0];
+  login: async (email, password) => {
+    // FastAPI OAuth2 expects form-urlencoded
+    const formData = new URLSearchParams();
+    formData.append('username', email);
+    formData.append('password', password);
 
-    localStorage.setItem(AUTH_KEY, JSON.stringify(user));
-    return { success: true, user };
+    const response = await apiClient.post('/auth/login', formData, {
+      headers: {
+        'Content-Type': 'application/x-www-form-urlencoded',
+      },
+    });
+
+    const { access_token } = response.data;
+    localStorage.setItem(AUTH_KEY, access_token);
+    
+    // Fetch and return user profile
+    const userRes = await apiClient.get('/auth/me');
+    return { success: true, user: userRes.data };
   },
 
   logout: async () => {
@@ -19,20 +28,15 @@ export const authService = {
     return { success: true };
   },
 
-  getCurrentUser: () => {
-    const data = localStorage.getItem(AUTH_KEY);
-    if (!data) return INITIAL_USERS[0]; // Default to admin for demo if unset
+  getCurrentUser: async () => {
+    const token = localStorage.getItem(AUTH_KEY);
+    if (!token) return null;
     try {
-      return JSON.parse(data);
+      const response = await apiClient.get('/auth/me');
+      return response.data;
     } catch (e) {
-      return INITIAL_USERS[0];
+      localStorage.removeItem(AUTH_KEY);
+      return null;
     }
-  },
-
-  switchRole: async (role) => {
-    const allUsers = await userService.getAll();
-    const user = allUsers.find(u => u.role === role) || allUsers[0];
-    localStorage.setItem(AUTH_KEY, JSON.stringify(user));
-    return user;
   }
 };

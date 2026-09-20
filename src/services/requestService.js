@@ -1,128 +1,102 @@
-import { INITIAL_REQUESTS, INITIAL_TRANSFERS } from '../data/mockData';
-
-const REQ_STORAGE_KEY = 'labtrack_requests';
-const TRF_STORAGE_KEY = 'labtrack_transfers';
-
-const getInitialRequests = () => {
-  const saved = localStorage.getItem(REQ_STORAGE_KEY);
-  if (saved) {
-    try { return JSON.parse(saved); } catch (e) { /* fallback */ }
-  }
-  return [...INITIAL_REQUESTS];
-};
-
-const getInitialTransfers = () => {
-  const saved = localStorage.getItem(TRF_STORAGE_KEY);
-  if (saved) {
-    try { return JSON.parse(saved); } catch (e) { /* fallback */ }
-  }
-  return [...INITIAL_TRANSFERS];
-};
-
-let requestStore = getInitialRequests();
-let transferStore = getInitialTransfers();
-
-const persist = () => {
-  try {
-    localStorage.setItem(REQ_STORAGE_KEY, JSON.stringify(requestStore));
-    localStorage.setItem(TRF_STORAGE_KEY, JSON.stringify(transferStore));
-  } catch (e) {
-    console.error('Failed to persist requests to localStorage', e);
-  }
-};
+import apiClient from '../api/client';
 
 export const requestService = {
   getAllRequests: async () => {
-    return [...requestStore];
+    try {
+      const response = await apiClient.get('/borrowing/requests');
+      // Map backend fields to frontend-expected field names
+      return response.data.map(req => ({
+        id: req.id,
+        requesterId: req.requester_id,
+        equipmentId: req.model_id,
+        labId: req.lab_id,
+        requestDate: req.required_from,
+        requiredFrom: req.required_from,
+        requiredUntil: req.required_until,
+        status: req.status.charAt(0).toUpperCase() + req.status.slice(1).toLowerCase(),
+        unitAssetId: null,
+        // Keep raw fields too for compatibility
+        requester_id: req.requester_id,
+        model_id: req.model_id,
+        lab_id: req.lab_id
+      }));
+    } catch (e) {
+      console.error('Error fetching requests', e);
+      return [];
+    }
   },
 
   getByRequester: async (requesterId) => {
-    return requestStore.filter(req => req.requesterId === requesterId);
+    const all = await requestService.getAllRequests();
+    return all.filter(req => req.requesterId === parseInt(requesterId) || req.requesterId === requesterId);
   },
 
   getByLab: async (labId) => {
-    return requestStore.filter(req => req.labId === labId);
+    const all = await requestService.getAllRequests();
+    return all.filter(req => req.labId === parseInt(labId) || req.labId === labId);
   },
 
   getApprovedByBorrower: async (borrowerId) => {
-    return requestStore.filter(
-      req => (req.requesterId === borrowerId || req.requesterName?.toLowerCase().includes(borrowerId.toLowerCase())) &&
+    const all = await requestService.getAllRequests();
+    return all.filter(
+      req => (req.requesterId === parseInt(borrowerId) || req.requesterId === borrowerId) &&
              req.status === 'Approved'
     );
   },
 
   createRequest: async (data) => {
-    const newReq = {
-      id: `REQ-${Math.floor(5000 + Math.random() * 5000)}`,
-      ...data,
-      requestDate: new Date().toISOString().split('T')[0],
-      status: 'Pending',
-      unitAssetId: null
+    const payload = {
+      model_id: parseInt(data.modelId || data.equipmentId),
+      required_from: data.requiredFrom || new Date().toISOString(),
+      required_until: data.requiredUntil || data.dueDate
     };
-    requestStore.unshift(newReq);
-    persist();
-    return newReq;
+    try {
+      const response = await apiClient.post('/borrowing/requests', payload);
+      return response.data;
+    } catch (e) {
+      throw e;
+    }
   },
 
   updateRequestStatus: async (id, status, extraData = {}) => {
-    requestStore = requestStore.map(req => 
-      req.id === id ? { ...req, status, ...extraData } : req
-    );
-    persist();
-    return requestStore.find(req => req.id === id);
+    try {
+      if (status === 'Approved' || status === 'APPROVED') {
+        const res = await apiClient.post(`/borrowing/requests/${id}/approve`);
+        return res.data;
+      } else if (status === 'Rejected' || status === 'REJECTED') {
+        const res = await apiClient.post(`/borrowing/requests/${id}/reject`, { reason: extraData.reason || 'Rejected' });
+        return res.data;
+      } else {
+        console.warn('Status update not fully supported via API:', status);
+        return { id, status };
+      }
+    } catch (e) {
+      throw e;
+    }
   },
 
   createExtensionRequest: async (originalRequestId, newDueDate, reason) => {
-    const orig = requestStore.find(r => r.id === originalRequestId);
-    if (!orig) throw new Error('Original request not found');
-
-    const updated = {
-      ...orig,
-      status: 'Extension_Pending',
-      requestedNewDueDate: newDueDate,
-      extensionReason: reason
-    };
-
-    requestStore = requestStore.map(r => r.id === originalRequestId ? updated : r);
-    persist();
-    return updated;
+    console.warn('createExtensionRequest not implemented on backend');
+    return { id: originalRequestId, status: 'EXTENSION_PENDING' };
   },
 
   approveExtension: async (requestId) => {
-    const orig = requestStore.find(r => r.id === requestId);
-    if (!orig) throw new Error('Request not found');
-
-    const updated = {
-      ...orig,
-      status: 'Extended',
-      requiredUntil: orig.requestedNewDueDate || orig.requiredUntil,
-      previousDueDate: orig.requiredUntil,
-      requestedNewDueDate: null
-    };
-
-    requestStore = requestStore.map(r => r.id === requestId ? updated : r);
-    persist();
-    return updated;
+    console.warn('approveExtension not implemented on backend');
+    return { id: requestId, status: 'EXTENDED' };
   },
 
   getAllTransfers: async () => {
-    return [...transferStore];
+    console.warn('Transfers not implemented on backend');
+    return [];
   },
 
   createTransfer: async (data) => {
-    const newTransfer = {
-      id: `TRF-${Math.floor(3000 + Math.random() * 7000)}`,
-      ...data,
-      status: 'Pending'
-    };
-    transferStore.unshift(newTransfer);
-    persist();
-    return newTransfer;
+    console.warn('Transfers not implemented on backend');
+    return { id: 'TRF-000', ...data, status: 'Pending' };
   },
 
   updateTransferStatus: async (id, status) => {
-    transferStore = transferStore.map(t => t.id === id ? { ...t, status } : t);
-    persist();
-    return transferStore.find(t => t.id === id);
+    console.warn('Transfers not implemented on backend');
+    return { id, status };
   }
 };

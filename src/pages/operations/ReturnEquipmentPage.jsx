@@ -21,9 +21,9 @@ export const ReturnEquipmentPage = () => {
 
     // 1. Try to find active transaction matching unitAssetId, equipmentId, or txn id
     let txn = transactionsList.find(
-      t => (t.unitAssetId?.toLowerCase() === cleanCode.toLowerCase() ||
-            t.equipmentId?.toLowerCase() === cleanCode.toLowerCase() ||
-            t.id?.toLowerCase() === cleanCode.toLowerCase()) &&
+      t => (String(t.unitAssetId || '').toLowerCase() === cleanCode.toLowerCase() ||
+            String(t.equipmentId || '').toLowerCase() === cleanCode.toLowerCase() ||
+            String(t.id || '').toLowerCase() === cleanCode.toLowerCase()) &&
            (t.status === 'Issued' || t.status === 'Overdue')
     );
 
@@ -53,7 +53,7 @@ export const ReturnEquipmentPage = () => {
 
   const handleConfirmReturn = async () => {
     if (!selectedTxn) return;
-    await returnEquipmentAction(selectedTxn.id, condition, remarks);
+    await returnEquipmentAction(selectedTxn.id, selectedTxn.unitAssetId, condition, remarks);
     navigate('/transactions');
   };
 

@@ -74,6 +74,39 @@ async def get_pending_requests(
     )
     return result.scalars().all()
 
+@router.get("/requests", response_model=List[RequestResponse])
+async def list_all_requests(
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    if current_user.role == RoleEnum.ADMIN:
+        result = await db.execute(select(Request))
+    elif current_user.role == RoleEnum.ASSISTANT:
+        lab_ids = current_user.assigned_labs or []
+        if not lab_ids:
+            return []
+        result = await db.execute(select(Request).where(Request.lab_id.in_(lab_ids)))
+    else:
+        # Students/Faculty see only their own requests
+        result = await db.execute(select(Request).where(Request.requester_id == current_user.id))
+    return result.scalars().all()
+
+@router.get("/transactions", response_model=List[TransactionResponse])
+async def list_all_transactions(
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    if current_user.role == RoleEnum.ADMIN:
+        result = await db.execute(select(Transaction))
+    elif current_user.role == RoleEnum.ASSISTANT:
+        lab_ids = current_user.assigned_labs or []
+        if not lab_ids:
+            return []
+        result = await db.execute(select(Transaction).where(Transaction.lab_id.in_(lab_ids)))
+    else:
+        result = await db.execute(select(Transaction).where(Transaction.borrower_id == current_user.id))
+    return result.scalars().all()
+
 @router.post("/requests/{request_id}/approve", response_model=RequestResponse)
 async def approve_request(
     request_id: int,

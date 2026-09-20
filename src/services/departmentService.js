@@ -1,54 +1,36 @@
-import { INITIAL_DEPARTMENTS } from '../data/mockData';
-
-const DEPT_STORAGE_KEY = 'labtrack_departments';
-
-const getInitialData = () => {
-  const saved = localStorage.getItem(DEPT_STORAGE_KEY);
-  if (saved) {
-    try { return JSON.parse(saved); } catch (e) { /* fallback */ }
-  }
-  return [...INITIAL_DEPARTMENTS];
-};
-
-let departmentStore = getInitialData();
-
-const persist = () => {
-  try {
-    localStorage.setItem(DEPT_STORAGE_KEY, JSON.stringify(departmentStore));
-  } catch (e) {
-    console.error('Failed to persist departments to localStorage', e);
-  }
-};
+import apiClient from '../api/client';
 
 export const departmentService = {
   getAll: async () => {
-    return [...departmentStore];
+    try {
+      const response = await apiClient.get('/departments/');
+      return response.data;
+    } catch (e) {
+      console.error('Error fetching departments', e);
+      return [];
+    }
   },
 
   getById: async (id) => {
-    return departmentStore.find(d => d.id === id) || null;
+    try {
+      const response = await apiClient.get(`/departments/${id}`);
+      return response.data;
+    } catch (e) {
+      return null;
+    }
   },
 
   create: async (data) => {
-    const newDept = {
-      id: data.id || `DEPT-${(data.code || data.name.substring(0, 3)).toUpperCase()}`,
-      ...data,
-      totalLabs: data.totalLabs || 0
+    const payload = {
+      name: data.name,
+      code: data.code,
+      hod_name: data.hodName || data.hod_name || "TBD"
     };
-    departmentStore.push(newDept);
-    persist();
-    return newDept;
-  },
-
-  update: async (id, data) => {
-    departmentStore = departmentStore.map(d => d.id === id ? { ...d, ...data } : d);
-    persist();
-    return departmentStore.find(d => d.id === id);
-  },
-
-  delete: async (id) => {
-    departmentStore = departmentStore.filter(d => d.id !== id);
-    persist();
-    return { success: true };
+    try {
+      const response = await apiClient.post('/departments/', payload);
+      return response.data;
+    } catch (e) {
+      throw e;
+    }
   }
 };
