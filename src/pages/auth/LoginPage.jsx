@@ -5,7 +5,7 @@ import { ShieldCheck, UserCheck, GraduationCap, Briefcase, Lock, User, ArrowRigh
 
 export const LoginPage = () => {
   const navigate = useNavigate();
-  const { login, switchDemoRole } = useAuth();
+  const { login } = useAuth();
 
   const [emailOrId, setEmailOrId] = useState('');
   const [password, setPassword] = useState('');
@@ -18,11 +18,6 @@ export const LoginPage = () => {
     navigateToRoleDashboard(selectedRole);
   };
 
-  const handleDemoLogin = (role) => {
-    setSelectedRole(role);
-    switchDemoRole(role);
-    navigateToRoleDashboard(role);
-  };
 
   const navigateToRoleDashboard = (role) => {
     switch (role) {
@@ -167,50 +162,6 @@ export const LoginPage = () => {
             </button>
           </form>
 
-          {/* Quick Demo Login Triggers */}
-          <div style={{ marginTop: '1.5rem', paddingTop: '1.25rem', borderTop: '1px solid #e2e8f0' }}>
-            <div style={{ fontSize: '0.75rem', fontWeight: 700, color: '#64748b', textTransform: 'uppercase', letterSpacing: '0.04em', marginBottom: '0.75rem', textAlign: 'center' }}>
-              INSTANT DEMO LOGIN BY ROLE
-            </div>
-
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0.5rem' }}>
-              <button
-                type="button"
-                className="btn btn-secondary btn-sm"
-                onClick={() => handleDemoLogin('admin')}
-                style={{ justifyContent: 'flex-start' }}
-              >
-                <ShieldCheck size={14} style={{ color: '#1e40af' }} /> Admin
-              </button>
-
-              <button
-                type="button"
-                className="btn btn-secondary btn-sm"
-                onClick={() => handleDemoLogin('assistant')}
-                style={{ justifyContent: 'flex-start' }}
-              >
-                <UserCheck size={14} style={{ color: '#059669' }} /> Lab Assistant
-              </button>
-
-              <button
-                type="button"
-                className="btn btn-secondary btn-sm"
-                onClick={() => handleDemoLogin('faculty')}
-                style={{ justifyContent: 'flex-start' }}
-              >
-                <Briefcase size={14} style={{ color: '#d97706' }} /> Faculty
-              </button>
-
-              <button
-                type="button"
-                className="btn btn-secondary btn-sm"
-                onClick={() => handleDemoLogin('student')}
-                style={{ justifyContent: 'flex-start' }}
-              >
-                <GraduationCap size={14} style={{ color: '#7c3aed' }} /> Student
-              </button>
-            </div>
-          </div>
         </div>
 
         <div style={{ padding: '0.75rem', backgroundColor: '#f8fafc', borderTop: '1px solid #e2e8f0', textAlign: 'center', fontSize: '0.75rem', color: '#64748b' }}>
