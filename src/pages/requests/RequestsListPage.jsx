@@ -4,13 +4,14 @@ import { DataTable } from '../../components/common/DataTable';
 import { StatusBadge } from '../../components/common/StatusBadge';
 import { useLabTrack } from '../../context/LabTrackContext';
 import { useAuth } from '../../context/AuthContext';
-import { Link } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
 import { Send, CheckCircle, XCircle, RefreshCw, QrCode, Clock, Sparkles } from 'lucide-react';
 
 export const RequestsListPage = () => {
   const { user } = useAuth();
   const { requestsList, transactionsList, updateRequestStatusAction, approveExtensionAction } = useLabTrack();
   const [filterStatus, setFilterStatus] = useState('ALL');
+  const navigate = useNavigate();
 
   const isAssistant = user?.role === 'assistant';
   const assignedLabIds = user?.assignedLabIds || [];
@@ -142,6 +143,17 @@ export const RequestsListPage = () => {
                 title="Approve for physical pickup"
               >
                 <CheckCircle size={13} /> Approve
+              </button>
+              <button
+                className="btn btn-primary btn-sm"
+                onClick={async () => {
+                  await handleApprove(row);
+                  navigate(`/issue-equipment?autoRequestId=${row.id}`);
+                }}
+                style={{ backgroundColor: '#0ea5e9', borderColor: '#0284c7' }}
+                title="Approve and immediately go to checkout counter"
+              >
+                <Sparkles size={13} /> Approve & Issue Now
               </button>
               <button
                 className="btn btn-danger btn-sm"

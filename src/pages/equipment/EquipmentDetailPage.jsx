@@ -5,17 +5,21 @@ import { PageHeader } from '../../components/common/PageHeader';
 import { StatusBadge } from '../../components/common/StatusBadge';
 import { QRCodeDisplay } from '../../components/scanner/QRCodeDisplay';
 import { QRPrintSheet } from '../../components/scanner/QRPrintSheet';
+import { useAuth } from '../../context/AuthContext';
 import { ArrowLeft, Package, Building2, Calendar, Tag, Printer, QrCode } from 'lucide-react';
 
 export const EquipmentDetailPage = () => {
   const { id } = useParams();
   const { equipmentList } = useLabTrack();
+  const { user } = useAuth();
+  // --- NR-1: Only admin/assistant can print QR ---
+  const canPrintQR = user?.role === 'admin' || user?.role === 'assistant';
 
   const [showPrintSheet, setShowPrintSheet] = useState(false);
   const [printUnits, setPrintUnits] = useState([]);
 
   // Match by equipment id or unit asset id
-  let item = equipmentList.find(e => e.id === id);
+  let item = equipmentList.find(e => e.id.toString() === id.toString());
   let highlightedUnit = null;
 
   if (!item) {
@@ -31,7 +35,7 @@ export const EquipmentDetailPage = () => {
     }
   }
 
-  if (!item) {
+  if (!item && equipmentList.length > 0) {
     item = equipmentList[0];
   }
 
@@ -55,9 +59,11 @@ export const EquipmentDetailPage = () => {
         subtitle={`Model ID: ${item.id} | Laboratory: ${item.labName}`}
         actions={
           <div style={{ display: 'flex', gap: '0.5rem' }}>
-            <button className="btn btn-primary" onClick={handlePrintAllQR}>
-              <Printer size={14} /> Print All {units.length} QR Stickers
-            </button>
+            {canPrintQR && (
+              <button className="btn btn-primary" onClick={handlePrintAllQR}>
+                <Printer size={14} /> Print All {units.length} QR Stickers
+              </button>
+            )}
             <Link to="/equipment" className="btn btn-secondary">
               <ArrowLeft size={14} /> Back to Equipment List
             </Link>
@@ -86,24 +92,26 @@ export const EquipmentDetailPage = () => {
           </div>
         </div>
 
-        <div className="portal-card" style={{ textAlign: 'center', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center' }}>
-          <div className="portal-header" style={{ width: '100%' }}>
-            <div className="portal-title">Primary Asset QR Tag</div>
+        {canPrintQR && (
+          <div className="portal-card" style={{ textAlign: 'center', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center' }}>
+            <div className="portal-header" style={{ width: '100%' }}>
+              <div className="portal-title">Primary Asset QR Tag</div>
+            </div>
+            <QRCodeDisplay
+              value={primaryAssetId}
+              title={item.name}
+              subtitle={item.labName}
+              size={140}
+            />
+            <button
+              className="btn btn-secondary btn-sm"
+              onClick={handlePrintAllQR}
+              style={{ marginTop: '0.75rem' }}
+            >
+              <Printer size={13} /> Print Label Grid
+            </button>
           </div>
-          <QRCodeDisplay
-            value={primaryAssetId}
-            title={item.name}
-            subtitle={item.labName}
-            size={140}
-          />
-          <button
-            className="btn btn-secondary btn-sm"
-            onClick={handlePrintAllQR}
-            style={{ marginTop: '0.75rem' }}
-          >
-            <Printer size={13} /> Print Label Grid
-          </button>
-        </div>
+        )}
       </div>
 
       {/* Individual Registered Units Table */}
@@ -122,7 +130,7 @@ export const EquipmentDetailPage = () => {
                 <th>Physical Serial Number</th>
                 <th>Condition</th>
                 <th>Current Status</th>
-                <th>Actions</th>
+                {canPrintQR && <th>Actions</th>}
               </tr>
             </thead>
             <tbody>
@@ -142,14 +150,16 @@ export const EquipmentDetailPage = () => {
                         {unit.status}
                       </span>
                     </td>
-                    <td>
-                      <button
-                        className="btn btn-secondary btn-sm"
-                        onClick={() => handlePrintSingleQR(unit)}
-                      >
-                        <Printer size={13} /> Print QR
-                      </button>
-                    </td>
+                    {canPrintQR && (
+                      <td>
+                        <button
+                          className="btn btn-secondary btn-sm"
+                          onClick={() => handlePrintSingleQR(unit)}
+                        >
+                          <Printer size={13} /> Print QR
+                        </button>
+                      </td>
+                    )}
                   </tr>
                 );
               })}

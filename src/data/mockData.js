@@ -52,7 +52,7 @@ export const INITIAL_USERS = [
   {
     id: 'USR-1003',
     name: 'Prof. Eleanor Vance',
-    email: 'faculty@university.edu',
+    email: 'FCS001@charusat.edu.in',
     role: 'faculty',
     departmentId: 'DEPT-CS',
     department: 'Department of Computer Science & Engineering',
@@ -64,7 +64,7 @@ export const INITIAL_USERS = [
   {
     id: 'USR-1004',
     name: 'Alex Johnson',
-    email: 'student@university.edu',
+    email: '24CS001@charusat.edu.in',
     role: 'student',
     departmentId: 'DEPT-CS',
     department: 'Department of Computer Science & Engineering',
@@ -76,7 +76,7 @@ export const INITIAL_USERS = [
   {
     id: 'USR-1005',
     name: 'Sarah Connor',
-    email: 's.connor@university.edu',
+    email: '23RB001@charusat.edu.in',
     role: 'student',
     departmentId: 'DEPT-ROB',
     department: 'Department of Robotics & Automation',

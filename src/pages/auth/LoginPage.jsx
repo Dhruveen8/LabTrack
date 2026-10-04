@@ -11,11 +11,27 @@ export const LoginPage = () => {
   const [password, setPassword] = useState('');
   const [rememberMe, setRememberMe] = useState(true);
   const [selectedRole, setSelectedRole] = useState('admin');
+  // --- NR-4: Login error state ---
+  const [loginError, setLoginError] = useState('');
 
   const handleLoginSubmit = async (e) => {
     e.preventDefault();
-    await login(emailOrId || 'admin@university.edu', password || 'password', selectedRole);
-    navigateToRoleDashboard(selectedRole);
+    setLoginError('');
+
+    // --- FE-1: Require actual credentials, no fallback defaults ---
+    if (!emailOrId || !password) {
+      setLoginError('Please enter your University ID/Email and Password.');
+      return;
+    }
+
+    const result = await login(emailOrId, password, selectedRole);
+    if (result && !result.success) {
+      setLoginError(result.error || 'Invalid credentials. Please try again.');
+      return;
+    }
+    if (result?.success !== false) {
+      navigateToRoleDashboard(selectedRole);
+    }
   };
 
 
@@ -111,6 +127,21 @@ export const LoginPage = () => {
 
         <div style={{ padding: '1.5rem' }}>
           <form onSubmit={handleLoginSubmit}>
+            {/* --- NR-4: Error banner --- */}
+            {loginError && (
+              <div style={{
+                backgroundColor: '#fef2f2',
+                border: '1px solid #fecaca',
+                color: '#991b1b',
+                padding: '0.65rem',
+                borderRadius: '6px',
+                marginBottom: '1rem',
+                fontSize: '0.85rem'
+              }}>
+                ⚠️ {loginError}
+              </div>
+            )}
+
             <div className="form-group">
               <label className="form-label">University ID / Email Address</label>
               <div style={{ position: 'relative' }}>

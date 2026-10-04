@@ -56,22 +56,26 @@ export const RequestEquipmentPage = () => {
       return;
     }
 
-    await createRequestAction({
-      requesterName: user?.name || 'Portal User',
-      requesterId: user?.universityId || 'STU-2024-884',
-      requesterRole: userRole,
-      department: user?.department || 'Engineering',
-      equipmentId: selectedEq.id,
-      equipmentName: selectedEq.name,
-      labId: selectedEq.labId,
-      labName: selectedEq.labName,
-      quantity: qty,
-      requiredFrom: fromDate,
-      requiredUntil: untilDate,
-      purpose
-    });
-
-    navigate('/requests');
+    try {
+      await createRequestAction({
+        requesterName: user?.name || 'Portal User',
+        requesterId: user?.universityId || 'STU-2024-884',
+        requesterRole: userRole,
+        department: user?.department || 'Engineering',
+        equipmentId: selectedEq.id,
+        equipmentName: selectedEq.name,
+        labId: selectedEq.labId,
+        labName: selectedEq.labName,
+        quantity: qty,
+        requiredFrom: fromDate,
+        requiredUntil: untilDate,
+        purpose
+      });
+      navigate('/requests');
+    } catch (err) {
+      console.error(err);
+      setErrorMsg(err.response?.data?.detail || err.message || 'Failed to submit request');
+    }
   };
 
   return (

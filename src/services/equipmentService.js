@@ -116,17 +116,32 @@ export const equipmentService = {
   },
 
   update: async (id, updatedData) => {
-    console.warn('Update equipment not implemented on backend');
-    return { id, ...updatedData };
+    try {
+      const response = await apiClient.put(`/inventory/models/${id}`, updatedData);
+      return response.data;
+    } catch (e) {
+      throw e;
+    }
   },
 
   delete: async (id) => {
-    console.warn('Delete equipment not implemented on backend');
-    return { success: true };
+    try {
+      const response = await apiClient.delete(`/inventory/models/${id}`);
+      return response.data;
+    } catch (e) {
+      throw e;
+    }
   },
 
   updateUnitStatus: async (assetId, newStatus, condition = null) => {
-    console.warn('Update unit status direct not fully supported outside borrowing flow');
-    return null;
+    try {
+      const payload = {};
+      if (newStatus) payload.status = newStatus.toUpperCase();
+      if (condition) payload.condition = condition;
+      const response = await apiClient.patch(`/inventory/units/${assetId}/status`, payload);
+      return response.data;
+    } catch (e) {
+      throw e;
+    }
   }
 };

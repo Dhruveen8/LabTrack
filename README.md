@@ -4,14 +4,53 @@ LabTrack is an enterprise-grade, multi-department web platform built to handle u
 
 ---
 
-## 🚀 Tech Stack & System Architecture
+## 🚀 Tech Stack & Core Technologies
 
 * **Frontend**: React 19, TypeScript / JSX, Vite 8, React Router v7, Lucide Icons, Recharts, `qrcode.react`
 * **Styling & Design System**: Vanilla CSS Design Tokens (Institutional Academic Portal Theme)
-* **Data Layer**:
-  * **Phase 1 (Active)**: In-Memory Client Store + `localStorage` persistence
-  * **Phase 2 (Roadmap Target)**: Decoupled Python FastAPI Backend + Relational Database (PostgreSQL) + Redis Caching
-* **Linting & Code Quality**: Oxlint
+* **Backend**: Python FastAPI 
+* **Database**: PostgreSQL (Relational Database)
+* **Infrastructure**: Docker & Docker Compose (Nginx reverse proxy, hot-reloading for dev, production-ready routing)
+* **Linting & Code Quality**: Oxlint (Frontend), Flake8 (Backend)
+
+---
+
+## 🏗️ System Design & Architecture
+
+LabTrack employs a fully decoupled, containerized microservices architecture to ensure scalability, security, and ease of deployment.
+
+```text
+                     [ Client Browser ]
+                             │
+                             ▼ (HTTP/80)
+┌────────────────────────────────────────────────────────┐
+│                  Nginx (API Gateway)                   │
+│  - Serves compiled React Static Assets                 │
+│  - Reverse proxies `/api/*` to FastAPI                 │
+└────────────────────────────┬───────────────────────────┘
+                             │
+          ┌──────────────────┴──────────────────┐
+          │ (React Routes)                      │ (/api/*)
+          ▼                                     ▼
+┌──────────────────────┐              ┌──────────────────────┐
+│  React (Vite) App    │              │  FastAPI Backend     │
+│  - Auth Context      │              │  - JWT Auth (HS256)  │
+│  - Axios Client      │◄────────────►│  - Pydantic Schemas  │
+│  - UI Components     │   (JSON)     │  - Alembic Migrations│
+└──────────────────────┘              └──────────┬───────────┘
+                                                 │
+                                                 ▼ (TCP/5432)
+                                      ┌──────────────────────┐
+                                      │   PostgreSQL DB      │
+                                      │   - Relational Data  │
+                                      │   - Persistent Vol   │
+                                      └──────────────────────┘
+```
+
+**Architectural Highlights:**
+1. **API Gateway & Routing**: The frontend Docker container runs Nginx, which serves the static Vite build. It also intercepts all requests starting with `/api` and strictly forwards them to the backend container, eliminating CORS configuration headaches in production.
+2. **Idempotent Bootstrapping**: The backend container relies on a custom `entrypoint.sh` script. When booted, it actively waits for the database to become healthy, automatically runs Alembic SQL migrations (`alembic upgrade head`), and safely seeds initial mock data only if the database is empty.
+3. **Decoupled API**: The React client communicates with the backend exclusively through Axios endpoints defined in `src/api/client.js`, guaranteeing clean separation of concerns.
 
 ---
 
@@ -34,7 +73,7 @@ To reflect authentic university structures:
 
 LabTrack enforces a structured, audit-proof workflow with precise QR code scanning timing:
 
-```
+```text
 [Student / Faculty]
    │
    ├─► 1. Browse Lab Inventory
@@ -73,7 +112,7 @@ LabTrack enforces a structured, audit-proof workflow with precise QR code scanni
 
 ### 1. Unique Asset ID Format
 Every physical unit receives a unique Asset ID:
-```
+```text
 LT-[LAB_CODE]-[CATEGORY_CODE]-[SEQUENCE]
 ```
 * Examples:
@@ -101,9 +140,9 @@ LT-[LAB_CODE]-[CATEGORY_CODE]-[SEQUENCE]
 
 ---
 
-## 🗄️ Relational Database Schema Blueprint (PostgreSQL Phase 2 Target)
+## 🗄️ Relational Database Schema Blueprint
 
-For production deployment with Python FastAPI, LabTrack targets a normalized PostgreSQL relational database:
+LabTrack is fully decoupled utilizing a normalized PostgreSQL relational database:
 
 * **`departments`**: `id`, `name`, `code`, `hod_name`.
 * **`labs`**: `id`, `department_id`, `name`, `location`, `incharge_user_id`.
@@ -112,22 +151,74 @@ For production deployment with Python FastAPI, LabTrack targets a normalized Pos
 * **`users`**: `id`, `email`, `name`, `role` (`ADMIN | ASSISTANT | FACULTY | STUDENT`), `department_id`, `assigned_labs` (JSON/Array).
 * **`requests`**: `id`, `requester_id`, `equipment_id`, `lab_id`, `required_from`, `required_until`, `status` (`PENDING | APPROVED | ISSUED | RETURNED | REJECTED | EXTENSION_PENDING | EXTENDED`).
 * **`transactions`**: `id`, `request_id`, `unit_asset_id`, `equipment_id`, `borrower_id`, `lab_id`, `issue_date`, `due_date`, `return_date`, `status`, `reissued_count`.
+* **`notifications`**: System-generated alerts for status updates, extensions, and automated rules.
 
 ---
 
-## 🏃 Getting Started
+## 🏃 Getting Started (Installation & Setup)
 
-1. **Install Dependencies**:
-   ```bash
-   npm install
-   ```
+LabTrack is completely containerized for zero-friction setup. The easiest way to run the platform is using Docker.
 
-2. **Run Development Server**:
-   ```bash
-   npm run dev
-   ```
+### 🐳 Method 1: Production-Ready Docker (Recommended)
 
-3. **Build for Production**:
+**Prerequisites:** [Docker](https://docs.docker.com/get-docker/) and [Docker Compose](https://docs.docker.com/compose/install/)
+
+1. Open a terminal in the root of the `LABTRACK` directory.
+2. Build and start the entire stack (PostgreSQL, FastAPI Backend, React Frontend, Nginx):
    ```bash
-   npm run build
+   docker compose up --build -d
    ```
+3. The system is entirely self-bootstrapping! On the first run, the backend will automatically:
+   - Run Alembic database migrations.
+   - Seed the database with a robust set of realistic default data and user accounts (safe, idempotent script).
+4. Access the application:
+   - **Frontend App**: `http://localhost` (Served by Nginx)
+   - **Backend API Docs**: `http://localhost/api/docs`
+
+### 💻 Method 2: Local Development Setup (Manual)
+
+If you prefer to run the servers natively for active development without Docker:
+
+**Prerequisites:** Node.js (v16+), Python (3.10+), PostgreSQL (Running on `5432` with a `labtrack` DB)
+
+**1. Configure Database**
+Update `backend/.env` with your local PostgreSQL credentials.
+
+**2. Backend Setup:**
+```bash
+cd backend
+python -m venv venv
+# Windows: .\venv\Scripts\activate | Mac/Linux: source venv/bin/activate
+pip install -r requirements.txt
+alembic upgrade head
+python populate_realistic_data.py  # Seed initial test data
+python -m uvicorn app.main:app --reload --port 8000
+```
+*(Backend runs at http://localhost:8000)*
+
+**3. Frontend Setup:**
+```bash
+# In a new terminal from the root directory
+npm install
+npm run dev
+```
+*(Frontend runs at http://localhost:5173)*
+
+---
+
+## 🔐 Default Login Credentials
+
+Whether you boot with Docker or run the local Python seed script, the database comes pre-populated with authentic institutional test accounts spanning all four RBAC tiers:
+
+**Password for all accounts:** `password`
+
+| Role | Name | Email | Permissions |
+| :--- | :--- | :--- | :--- |
+| **Admin** | System Administrator | `admin@labtrack.edu` | Global configuration, reporting, RBAC assignments |
+| **Faculty** | Dr. Sarah Mitchell | `FEE001@charusat.edu.in` | Request limits: up to 30 days |
+| **Assistant**| David Miller | `dmiller@labtrack.edu` | Manage IoT/Electronics Labs, counter checkout/return |
+| **Student** | Alex Rivera | `24EE001@charusat.edu.in` | Request limits: up to 14 days, max 3 concurrent requests |
+
+---
+
+*Powered by React, FastAPI, and PostgreSQL. Built for modern institutional asset integrity.*

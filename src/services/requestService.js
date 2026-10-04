@@ -13,7 +13,7 @@ export const requestService = {
         requestDate: req.required_from,
         requiredFrom: req.required_from,
         requiredUntil: req.required_until,
-        status: req.status.charAt(0).toUpperCase() + req.status.slice(1).toLowerCase(),
+        status: req.status.split('_').map(w => w.charAt(0).toUpperCase() + w.slice(1).toLowerCase()).join(' '),
         unitAssetId: null,
         // Keep raw fields too for compatibility
         requester_id: req.requester_id,
@@ -76,27 +76,69 @@ export const requestService = {
   },
 
   createExtensionRequest: async (originalRequestId, newDueDate, reason) => {
-    console.warn('createExtensionRequest not implemented on backend');
-    return { id: originalRequestId, status: 'EXTENSION_PENDING' };
+    try {
+      const response = await apiClient.post(`/borrowing/requests/${originalRequestId}/extend`, {
+        new_due_date: newDueDate,
+        reason: reason
+      });
+      return response.data;
+    } catch (e) {
+      throw e;
+    }
   },
 
   approveExtension: async (requestId) => {
-    console.warn('approveExtension not implemented on backend');
-    return { id: requestId, status: 'EXTENDED' };
+    try {
+      const response = await apiClient.post(`/borrowing/requests/${requestId}/approve-extension`);
+      return response.data;
+    } catch (e) {
+      throw e;
+    }
   },
 
   getAllTransfers: async () => {
-    console.warn('Transfers not implemented on backend');
-    return [];
+    try {
+      const response = await apiClient.get('/transfers/');
+      return response.data.map(tr => ({
+        id: tr.id,
+        equipmentId: tr.equipment_model_id,
+        fromLabId: tr.from_lab_id,
+        toLabId: tr.to_lab_id,
+        requesterId: tr.requester_id,
+        status: tr.status,
+        quantity: tr.quantity,
+        reason: tr.reason,
+        requestDate: tr.created_at,
+        resolvedDate: tr.resolved_at
+      }));
+    } catch (e) {
+      console.error('Error fetching transfers', e);
+      return [];
+    }
   },
 
   createTransfer: async (data) => {
-    console.warn('Transfers not implemented on backend');
-    return { id: 'TRF-000', ...data, status: 'Pending' };
+    try {
+      const payload = {
+        equipment_model_id: parseInt(data.equipmentId),
+        from_lab_id: parseInt(data.fromLabId),
+        to_lab_id: parseInt(data.toLabId),
+        quantity: parseInt(data.quantity) || 1,
+        reason: data.reason || null
+      };
+      const response = await apiClient.post('/transfers/', payload);
+      return response.data;
+    } catch (e) {
+      throw e;
+    }
   },
 
   updateTransferStatus: async (id, status) => {
-    console.warn('Transfers not implemented on backend');
-    return { id, status };
+    try {
+      const response = await apiClient.patch(`/transfers/${id}/status?status=${status.toUpperCase()}`);
+      return response.data;
+    } catch (e) {
+      throw e;
+    }
   }
 };

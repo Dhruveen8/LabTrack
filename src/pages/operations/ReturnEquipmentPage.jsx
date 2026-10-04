@@ -15,38 +15,45 @@ export const ReturnEquipmentPage = () => {
   const [remarks, setRemarks] = useState('Returned in verified condition');
   const [scanError, setScanError] = useState('');
 
-  const handleScan = (code) => {
+  const handleScan = async (code) => {
     setScanError('');
     const cleanCode = (code || '').trim();
 
-    // 1. Try to find active transaction matching unitAssetId, equipmentId, or txn id
-    let txn = transactionsList.find(
-      t => (String(t.unitAssetId || '').toLowerCase() === cleanCode.toLowerCase() ||
-            String(t.equipmentId || '').toLowerCase() === cleanCode.toLowerCase() ||
-            String(t.id || '').toLowerCase() === cleanCode.toLowerCase()) &&
-           (t.status === 'Issued' || t.status === 'Overdue')
-    );
+    try {
+      const { default: apiClient } = await import('../../api/client');
+      // Validate unit exists in backend
+      const unitRes = await apiClient.get(`/inventory/units/${cleanCode}`);
+      const apiUnit = unitRes.data;
 
-    // Fallback: search within first active transaction
-    if (!txn) {
-      txn = transactionsList.find(t => t.status === 'Issued' || t.status === 'Overdue');
-    }
+      // Ensure unit is actually ISSUED
+      if (apiUnit.status !== 'ISSUED') {
+         setScanError(`Unit ${cleanCode} is not currently checked out (Status: ${apiUnit.status}).`);
+         return;
+      }
 
-    if (!txn) {
-      setScanError(`No active issued transaction found for asset tag "${cleanCode}". The item may already be marked as returned.`);
-      return;
-    }
+      // Find the EXACT matching active transaction
+      const txn = transactionsList.find(
+        t => t.unitAssetId === apiUnit.asset_id && (t.status === 'Issued' || t.status === 'Overdue')
+      );
 
-    setSelectedTxn(txn);
+      if (!txn) {
+        setScanError(`No active transaction found for unit "${cleanCode}" in current session data. Try refreshing the page.`);
+        return;
+      }
 
-    // Find unit object if available
-    for (const eq of equipmentList) {
-      if (eq.units) {
-        const u = eq.units.find(unit => unit.assetId === txn.unitAssetId);
-        if (u) {
-          setMatchedUnit(u);
-          break;
-        }
+      setSelectedTxn(txn);
+      
+      // Merge backend unit data with UI shape
+      setMatchedUnit({
+        assetId: apiUnit.asset_id,
+        condition: apiUnit.condition,
+        serialNumber: apiUnit.serial_number
+      });
+    } catch (error) {
+      if (error.response?.status === 404) {
+        setScanError(`Asset tag "${cleanCode}" not found in inventory.`);
+      } else {
+        setScanError(`Error verifying unit: ${error.message}`);
       }
     }
   };

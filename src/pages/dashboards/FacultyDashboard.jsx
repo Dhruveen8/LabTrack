@@ -6,7 +6,7 @@ import { StatCard } from '../../components/common/StatCard';
 import { DataTable } from '../../components/common/DataTable';
 import { StatusBadge } from '../../components/common/StatusBadge';
 import { Link } from 'react-router-dom';
-import { Search, Send, CalendarCheck, BookOpen, Clock, AlertCircle, CheckSquare } from 'lucide-react';
+import { Search, Send, CalendarCheck, BookOpen, Clock, AlertCircle, CheckSquare, Zap } from 'lucide-react';
 
 export const FacultyDashboard = () => {
   const { user } = useAuth();
@@ -48,6 +48,9 @@ export const FacultyDashboard = () => {
           </Link>
           <Link to="/event-issue" className="btn btn-secondary">
             <CalendarCheck size={16} /> Event / Club Bulk Request
+          </Link>
+          <Link to="/quick-borrow" className="btn btn-secondary">
+            <Zap size={16} /> Quick Borrow Counter
           </Link>
         </div>
       </div>

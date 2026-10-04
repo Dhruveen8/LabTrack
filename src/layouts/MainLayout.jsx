@@ -25,7 +25,8 @@ import {
   Send,
   CalendarCheck,
   PackagePlus,
-  QrCode
+  QrCode,
+  Zap
 } from 'lucide-react';
 
 export const MainLayout = ({ children }) => {
@@ -96,6 +97,7 @@ export const MainLayout = ({ children }) => {
         { label: 'Request Equipment', path: '/request-equipment', icon: Send },
         { label: 'My Borrowings', path: '/transactions', icon: BookOpen },
         { label: 'My Requests', path: '/requests', icon: FileSpreadsheet },
+        { label: 'Quick Borrow Counter', path: '/quick-borrow', icon: Zap },
         { label: 'Event / Club Issue', path: '/event-issue', icon: CalendarCheck },
         { label: 'Inter-Lab Requests', path: '/inter-lab-transfers', icon: ArrowRightLeft },
         { label: 'Notifications', path: '/notifications', icon: Bell, badge: unreadCount },

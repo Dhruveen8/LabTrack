@@ -72,9 +72,4 @@ export const transactionService = {
       throw e;
     }
   },
-
-  extendDueDate: async (transactionId, newDueDate) => {
-    console.warn('extendDueDate not implemented directly on transaction backend');
-    return { id: transactionId };
-  }
 };

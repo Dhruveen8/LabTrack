@@ -16,29 +16,29 @@ export const LabsListPage = () => {
 
   const [newLabData, setNewLabData] = useState({
     name: '',
-    departmentId: 'DEPT-EE',
+    departmentId: departmentsList[0]?.id || '',
     location: '',
     description: '',
-    inchargeUserId: 'USR-1002'
+    inchargeUserId: null
   });
 
-  const [selectedAssistantId, setSelectedAssistantId] = useState('USR-1002');
+  const [selectedAssistantId, setSelectedAssistantId] = useState(null);
 
   const isAdmin = user?.role === 'admin';
-  const assistants = usersList.filter(u => u.role === 'assistant');
+  const assistants = usersList.filter(u => u.role?.toLowerCase() === 'assistant');
 
   // Filter labs
   let filteredLabs = labsList;
   if (selectedDeptId !== 'ALL') {
-    filteredLabs = labsList.filter(l => l.departmentId === selectedDeptId);
+    filteredLabs = labsList.filter(l => (l.department_id || l.departmentId) === parseInt(selectedDeptId));
   }
 
   const handleCreateLab = async (e) => {
     e.preventDefault();
     if (!newLabData.name.trim()) return alert('Please enter laboratory name');
 
-    const selectedDept = departmentsList.find(d => d.id === newLabData.departmentId);
-    const selectedAss = usersList.find(u => u.id === newLabData.inchargeUserId);
+    const selectedDept = departmentsList.find(d => d.id === parseInt(newLabData.departmentId));
+    const selectedAss = usersList.find(u => u.id === parseInt(newLabData.inchargeUserId));
 
     await addLab({
       ...newLabData,
@@ -49,10 +49,10 @@ export const LabsListPage = () => {
     setShowAddLabModal(false);
     setNewLabData({
       name: '',
-      departmentId: 'DEPT-EE',
+      departmentId: departmentsList[0]?.id || '',
       location: '',
       description: '',
-      inchargeUserId: 'USR-1002'
+      inchargeUserId: null
     });
   };
 
@@ -60,7 +60,7 @@ export const LabsListPage = () => {
     e.preventDefault();
     if (!targetLab || !selectedAssistantId) return;
 
-    const ass = usersList.find(u => u.id === selectedAssistantId);
+    const ass = usersList.find(u => u.id === parseInt(selectedAssistantId));
     if (!ass) return;
 
     await assignAssistantToLab(targetLab.id, ass.id, ass.name);
@@ -70,7 +70,7 @@ export const LabsListPage = () => {
 
   const openAssignModal = (lab) => {
     setTargetLab(lab);
-    setSelectedAssistantId(lab.inchargeUserId || (assistants[0]?.id || 'USR-1002'));
+    setSelectedAssistantId(lab.incharge_user_id || lab.inchargeUserId || assistants[0]?.id || null);
     setShowAssignModal(true);
   };
 
@@ -100,7 +100,7 @@ export const LabsListPage = () => {
           All Departments ({labsList.length} Labs)
         </button>
         {departmentsList.map(dept => {
-          const count = labsList.filter(l => l.departmentId === dept.id).length;
+          const count = labsList.filter(l => (l.department_id || l.departmentId) === dept.id).length;
           return (
             <button
               key={dept.id}
@@ -117,7 +117,8 @@ export const LabsListPage = () => {
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(320px, 1fr))', gap: '1.25rem' }}>
         {filteredLabs.map(lab => {
           const isUserAssigned = user?.assignedLabIds?.includes(lab.id);
-          const dept = departmentsList.find(d => d.id === lab.departmentId);
+          const dept = departmentsList.find(d => d.id === (lab.department_id || lab.departmentId));
+          const inchargeUser = usersList.find(u => u.id === lab.incharge_user_id);
 
           return (
             <div
@@ -152,7 +153,7 @@ export const LabsListPage = () => {
                 <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', backgroundColor: '#f1f5f9', padding: '0.5rem 0.75rem', borderRadius: '6px', marginBottom: '0.75rem' }}>
                   <div style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '0.8rem', color: '#334155' }}>
                     <UserCheck size={16} color="#1e40af" />
-                    <span>In-Charge: <strong>{lab.incharge || 'Unassigned'}</strong></span>
+                    <span>In-Charge: <strong>{inchargeUser?.name || lab.incharge || 'Unassigned'}</strong></span>
                   </div>
                   {isAdmin && (
                     <button

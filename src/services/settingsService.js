@@ -1,46 +1,39 @@
-const SETTINGS_STORAGE_KEY = 'labtrack_settings';
+import apiClient from '../api/client';
 
 const DEFAULT_SETTINGS = {
-  studentBorrowLimitDays: 14,
-  facultyBorrowLimitDays: 30,
-  emailOverdueAlerts: true,
-  transferAlerts: true,
-  allowSelfRenewal: true
-};
-
-const getInitialSettings = () => {
-  const saved = localStorage.getItem(SETTINGS_STORAGE_KEY);
-  if (saved) {
-    try {
-      return { ...DEFAULT_SETTINGS, ...JSON.parse(saved) };
-    } catch (e) { /* fallback */ }
-  }
-  return { ...DEFAULT_SETTINGS };
-};
-
-let settingsStore = getInitialSettings();
-
-const persist = () => {
-  try {
-    localStorage.setItem(SETTINGS_STORAGE_KEY, JSON.stringify(settingsStore));
-  } catch (e) {
-    console.error('Failed to persist settings to localStorage', e);
-  }
+  studentBorrowLimitDays: '14',
+  facultyBorrowLimitDays: '30',
+  emailOverdueAlerts: 'true',
+  transferAlerts: 'true',
+  allowSelfRenewal: 'true'
 };
 
 export const settingsService = {
   get: async () => {
-    return { ...settingsStore };
+    try {
+      const response = await apiClient.get('/settings/');
+      const backendSettings = response.data.settings;
+      
+      // Merge with defaults for any missing keys
+      return { ...DEFAULT_SETTINGS, ...backendSettings };
+    } catch (e) {
+      console.error('Error fetching settings', e);
+      return { ...DEFAULT_SETTINGS };
+    }
   },
 
   update: async (newSettings) => {
-    settingsStore = {
-      ...settingsStore,
-      ...newSettings,
-      studentBorrowLimitDays: parseInt(newSettings.studentBorrowLimitDays, 10) || DEFAULT_SETTINGS.studentBorrowLimitDays,
-      facultyBorrowLimitDays: parseInt(newSettings.facultyBorrowLimitDays, 10) || DEFAULT_SETTINGS.facultyBorrowLimitDays
-    };
-    persist();
-    return { ...settingsStore };
+    try {
+      // Convert boolean values to strings for generic key-value storage
+      const stringifiedSettings = {};
+      for (const [key, value] of Object.entries(newSettings)) {
+        stringifiedSettings[key] = String(value);
+      }
+      
+      await apiClient.put('/settings/', stringifiedSettings);
+      return await settingsService.get();
+    } catch (e) {
+      throw e;
+    }
   }
 };

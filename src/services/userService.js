@@ -1,10 +1,17 @@
 import apiClient from '../api/client';
 
+const mapUser = (user) => ({
+  ...user,
+  assignedLabIds: user.assigned_labs || user.assignedLabIds || [],
+  departmentId: user.department_id || user.departmentId || null,
+  role: user.role ? user.role.toLowerCase() : 'student'
+});
+
 export const userService = {
   getAll: async () => {
     try {
       const response = await apiClient.get('/auth/users');
-      return response.data;
+      return response.data.map(mapUser);
     } catch (e) {
       console.error('Error fetching users', e);
       return [];
@@ -37,19 +44,48 @@ export const userService = {
     };
     try {
       const response = await apiClient.post('/auth/register', payload);
-      return response.data;
+      return mapUser(response.data);
     } catch (e) {
       throw e;
     }
   },
 
   updateRole: async (id, newRole) => {
-    console.warn('updateRole not implemented on backend');
-    return { id, role: newRole };
+    try {
+      const response = await apiClient.put(`/auth/users/${id}`, { role: newRole.toUpperCase() });
+      return mapUser(response.data);
+    } catch (e) {
+      throw e;
+    }
   },
 
   updateStatus: async (id, newStatus) => {
-    console.warn('updateStatus not implemented on backend');
+    if (newStatus === 'inactive' || newStatus === 'deleted') {
+      try {
+        const response = await apiClient.delete(`/auth/users/${id}`);
+        return mapUser(response.data);
+      } catch (e) {
+        throw e;
+      }
+    }
     return { id, status: newStatus };
+  },
+
+  update: async (id, data) => {
+    try {
+      const response = await apiClient.put(`/auth/users/${id}`, data);
+      return mapUser(response.data);
+    } catch (e) {
+      throw e;
+    }
+  },
+
+  delete: async (id) => {
+    try {
+      const response = await apiClient.delete(`/auth/users/${id}`);
+      return mapUser(response.data);
+    } catch (e) {
+      throw e;
+    }
   }
 };

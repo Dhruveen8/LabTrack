@@ -1,8 +1,8 @@
-"""Initial schema
+"""Initial PG schema
 
-Revision ID: c437b1110943
+Revision ID: aab771930fe9
 Revises: 
-Create Date: 2026-09-20 21:00:11.053482
+Create Date: 2026-09-26 23:42:34.489964
 
 """
 from typing import Sequence, Union
@@ -12,7 +12,7 @@ import sqlalchemy as sa
 
 
 # revision identifiers, used by Alembic.
-revision: str = 'c437b1110943'
+revision: str = 'aab771930fe9'
 down_revision: Union[str, Sequence[str], None] = None
 branch_labels: Union[str, Sequence[str], None] = None
 depends_on: Union[str, Sequence[str], None] = None
@@ -30,6 +30,14 @@ def upgrade() -> None:
     sa.UniqueConstraint('code')
     )
     op.create_index(op.f('ix_departments_id'), 'departments', ['id'], unique=False)
+    op.create_table('system_settings',
+    sa.Column('id', sa.Integer(), nullable=False),
+    sa.Column('key', sa.String(), nullable=False),
+    sa.Column('value', sa.Text(), nullable=True),
+    sa.PrimaryKeyConstraint('id')
+    )
+    op.create_index(op.f('ix_system_settings_id'), 'system_settings', ['id'], unique=False)
+    op.create_index(op.f('ix_system_settings_key'), 'system_settings', ['key'], unique=True)
     op.create_table('users',
     sa.Column('id', sa.Integer(), nullable=False),
     sa.Column('email', sa.String(), nullable=False),
@@ -38,7 +46,7 @@ def upgrade() -> None:
     sa.Column('role', sa.Enum('ADMIN', 'ASSISTANT', 'FACULTY', 'STUDENT', name='roleenum'), nullable=False),
     sa.Column('department_id', sa.Integer(), nullable=True),
     sa.Column('assigned_labs', sa.JSON(), nullable=True),
-    sa.ForeignKeyConstraint(['department_id'], ['departments.id'], ),
+    sa.ForeignKeyConstraint(['department_id'], ['departments.id'], ondelete='SET NULL'),
     sa.PrimaryKeyConstraint('id')
     )
     op.create_index(op.f('ix_users_email'), 'users', ['email'], unique=True)
@@ -47,13 +55,27 @@ def upgrade() -> None:
     sa.Column('id', sa.Integer(), nullable=False),
     sa.Column('department_id', sa.Integer(), nullable=True),
     sa.Column('name', sa.String(), nullable=False),
+    sa.Column('code', sa.String(), nullable=True),
     sa.Column('location', sa.String(), nullable=True),
     sa.Column('incharge_user_id', sa.Integer(), nullable=True),
-    sa.ForeignKeyConstraint(['department_id'], ['departments.id'], ),
-    sa.ForeignKeyConstraint(['incharge_user_id'], ['users.id'], ),
+    sa.ForeignKeyConstraint(['department_id'], ['departments.id'], ondelete='RESTRICT'),
+    sa.ForeignKeyConstraint(['incharge_user_id'], ['users.id'], ondelete='SET NULL'),
     sa.PrimaryKeyConstraint('id')
     )
     op.create_index(op.f('ix_labs_id'), 'labs', ['id'], unique=False)
+    op.create_table('notifications',
+    sa.Column('id', sa.Integer(), nullable=False),
+    sa.Column('user_id', sa.Integer(), nullable=False),
+    sa.Column('title', sa.String(), nullable=False),
+    sa.Column('message', sa.Text(), nullable=True),
+    sa.Column('type', sa.Enum('INFO', 'WARNING', 'SUCCESS', 'ERROR', name='notificationtypeenum'), nullable=True),
+    sa.Column('category', sa.Enum('REQUEST', 'CHECKOUT', 'RETURN', 'EXTENSION', 'SYSTEM', 'QUICK_BORROW', name='notificationcategoryenum'), nullable=True),
+    sa.Column('read', sa.Boolean(), nullable=True),
+    sa.Column('created_at', sa.DateTime(timezone=True), nullable=True),
+    sa.ForeignKeyConstraint(['user_id'], ['users.id'], ondelete='CASCADE'),
+    sa.PrimaryKeyConstraint('id')
+    )
+    op.create_index(op.f('ix_notifications_id'), 'notifications', ['id'], unique=False)
     op.create_table('equipment_models',
     sa.Column('id', sa.Integer(), nullable=False),
     sa.Column('lab_id', sa.Integer(), nullable=True),
@@ -61,7 +83,8 @@ def upgrade() -> None:
     sa.Column('category', sa.String(), nullable=False),
     sa.Column('total_quantity', sa.Integer(), nullable=True),
     sa.Column('description', sa.String(), nullable=True),
-    sa.ForeignKeyConstraint(['lab_id'], ['labs.id'], ),
+    sa.Column('equipment_type', sa.Enum('STANDARD', 'QUICK_BORROW', name='equipmenttypeenum'), nullable=True),
+    sa.ForeignKeyConstraint(['lab_id'], ['labs.id'], ondelete='RESTRICT'),
     sa.PrimaryKeyConstraint('id')
     )
     op.create_index(op.f('ix_equipment_models_id'), 'equipment_models', ['id'], unique=False)
@@ -72,7 +95,7 @@ def upgrade() -> None:
     sa.Column('status', sa.Enum('AVAILABLE', 'ISSUED', 'MAINTENANCE', name='unitstatusenum'), nullable=True),
     sa.Column('condition', sa.String(), nullable=True),
     sa.Column('qr_code_url', sa.String(), nullable=True),
-    sa.ForeignKeyConstraint(['model_id'], ['equipment_models.id'], ),
+    sa.ForeignKeyConstraint(['model_id'], ['equipment_models.id'], ondelete='CASCADE'),
     sa.PrimaryKeyConstraint('asset_id')
     )
     op.create_index(op.f('ix_equipment_units_asset_id'), 'equipment_units', ['asset_id'], unique=False)
@@ -84,27 +107,46 @@ def upgrade() -> None:
     sa.Column('required_from', sa.DateTime(), nullable=False),
     sa.Column('required_until', sa.DateTime(), nullable=False),
     sa.Column('status', sa.Enum('PENDING', 'APPROVED', 'ISSUED', 'RETURNED', 'REJECTED', 'EXTENSION_PENDING', 'EXTENDED', name='requeststatusenum'), nullable=True),
-    sa.ForeignKeyConstraint(['lab_id'], ['labs.id'], ),
-    sa.ForeignKeyConstraint(['model_id'], ['equipment_models.id'], ),
-    sa.ForeignKeyConstraint(['requester_id'], ['users.id'], ),
+    sa.ForeignKeyConstraint(['lab_id'], ['labs.id'], ondelete='RESTRICT'),
+    sa.ForeignKeyConstraint(['model_id'], ['equipment_models.id'], ondelete='RESTRICT'),
+    sa.ForeignKeyConstraint(['requester_id'], ['users.id'], ondelete='RESTRICT'),
     sa.PrimaryKeyConstraint('id')
     )
     op.create_index(op.f('ix_requests_id'), 'requests', ['id'], unique=False)
+    op.create_table('transfers',
+    sa.Column('id', sa.Integer(), nullable=False),
+    sa.Column('equipment_model_id', sa.Integer(), nullable=False),
+    sa.Column('from_lab_id', sa.Integer(), nullable=False),
+    sa.Column('to_lab_id', sa.Integer(), nullable=False),
+    sa.Column('requester_id', sa.Integer(), nullable=False),
+    sa.Column('status', sa.Enum('PENDING', 'APPROVED', 'REJECTED', 'COMPLETED', name='transferstatusenum'), nullable=True),
+    sa.Column('quantity', sa.Integer(), nullable=True),
+    sa.Column('reason', sa.Text(), nullable=True),
+    sa.Column('created_at', sa.DateTime(timezone=True), nullable=True),
+    sa.Column('resolved_at', sa.DateTime(timezone=True), nullable=True),
+    sa.ForeignKeyConstraint(['equipment_model_id'], ['equipment_models.id'], ondelete='RESTRICT'),
+    sa.ForeignKeyConstraint(['from_lab_id'], ['labs.id'], ondelete='RESTRICT'),
+    sa.ForeignKeyConstraint(['requester_id'], ['users.id'], ondelete='RESTRICT'),
+    sa.ForeignKeyConstraint(['to_lab_id'], ['labs.id'], ondelete='RESTRICT'),
+    sa.PrimaryKeyConstraint('id')
+    )
+    op.create_index(op.f('ix_transfers_id'), 'transfers', ['id'], unique=False)
     op.create_table('transactions',
     sa.Column('id', sa.Integer(), nullable=False),
     sa.Column('request_id', sa.Integer(), nullable=True),
     sa.Column('unit_asset_id', sa.String(), nullable=True),
     sa.Column('borrower_id', sa.Integer(), nullable=True),
     sa.Column('lab_id', sa.Integer(), nullable=True),
-    sa.Column('issue_date', sa.DateTime(), nullable=True),
+    sa.Column('issue_date', sa.DateTime(timezone=True), nullable=True),
     sa.Column('due_date', sa.DateTime(), nullable=False),
     sa.Column('return_date', sa.DateTime(), nullable=True),
-    sa.Column('status', sa.Enum('ACTIVE', 'RETURNED', name='transactionstatusenum'), nullable=True),
+    sa.Column('status', sa.Enum('ACTIVE', 'RETURNED', 'OVERDUE', name='transactionstatusenum'), nullable=True),
     sa.Column('reissued_count', sa.Integer(), nullable=True),
-    sa.ForeignKeyConstraint(['borrower_id'], ['users.id'], ),
-    sa.ForeignKeyConstraint(['lab_id'], ['labs.id'], ),
-    sa.ForeignKeyConstraint(['request_id'], ['requests.id'], ),
-    sa.ForeignKeyConstraint(['unit_asset_id'], ['equipment_units.asset_id'], ),
+    sa.Column('is_quick_borrow', sa.Boolean(), nullable=True),
+    sa.ForeignKeyConstraint(['borrower_id'], ['users.id'], ondelete='RESTRICT'),
+    sa.ForeignKeyConstraint(['lab_id'], ['labs.id'], ondelete='RESTRICT'),
+    sa.ForeignKeyConstraint(['request_id'], ['requests.id'], ondelete='RESTRICT'),
+    sa.ForeignKeyConstraint(['unit_asset_id'], ['equipment_units.asset_id'], ondelete='RESTRICT'),
     sa.PrimaryKeyConstraint('id')
     )
     op.create_index(op.f('ix_transactions_id'), 'transactions', ['id'], unique=False)
@@ -116,17 +158,24 @@ def downgrade() -> None:
     # ### commands auto generated by Alembic - please adjust! ###
     op.drop_index(op.f('ix_transactions_id'), table_name='transactions')
     op.drop_table('transactions')
+    op.drop_index(op.f('ix_transfers_id'), table_name='transfers')
+    op.drop_table('transfers')
     op.drop_index(op.f('ix_requests_id'), table_name='requests')
     op.drop_table('requests')
     op.drop_index(op.f('ix_equipment_units_asset_id'), table_name='equipment_units')
     op.drop_table('equipment_units')
     op.drop_index(op.f('ix_equipment_models_id'), table_name='equipment_models')
     op.drop_table('equipment_models')
+    op.drop_index(op.f('ix_notifications_id'), table_name='notifications')
+    op.drop_table('notifications')
     op.drop_index(op.f('ix_labs_id'), table_name='labs')
     op.drop_table('labs')
     op.drop_index(op.f('ix_users_id'), table_name='users')
     op.drop_index(op.f('ix_users_email'), table_name='users')
     op.drop_table('users')
+    op.drop_index(op.f('ix_system_settings_key'), table_name='system_settings')
+    op.drop_index(op.f('ix_system_settings_id'), table_name='system_settings')
+    op.drop_table('system_settings')
     op.drop_index(op.f('ix_departments_id'), table_name='departments')
     op.drop_table('departments')
     # ### end Alembic commands ###

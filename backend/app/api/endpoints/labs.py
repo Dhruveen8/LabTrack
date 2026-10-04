@@ -6,7 +6,7 @@ from typing import List
 from app.db.database import get_db
 from app.db.models import Lab, Department, RoleEnum, User
 from app.schemas.department_lab import LabCreate, LabResponse
-from app.api.deps import require_role
+from app.api.deps import require_role, get_current_user, require_admin
 
 router = APIRouter()
 
@@ -27,10 +27,62 @@ async def create_lab(
     await db.refresh(lab)
     return lab
 
+# --- SEC-2: Require authentication to list labs ---
 @router.get("/", response_model=List[LabResponse])
-async def list_labs(db: AsyncSession = Depends(get_db)):
+async def list_labs(
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
     result = await db.execute(select(Lab))
     return result.scalars().all()
+
+# --- BE-3b: Lab CRUD ---
+@router.get("/{lab_id}", response_model=LabResponse)
+async def get_lab(
+    lab_id: int,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    result = await db.execute(select(Lab).where(Lab.id == lab_id))
+    lab = result.scalars().first()
+    if not lab:
+        raise HTTPException(status_code=404, detail="Lab not found")
+    return lab
+
+@router.put("/{lab_id}", response_model=LabResponse)
+async def update_lab(
+    lab_id: int,
+    lab_in: LabCreate,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_admin)
+):
+    result = await db.execute(select(Lab).where(Lab.id == lab_id))
+    lab = result.scalars().first()
+    if not lab:
+        raise HTTPException(status_code=404, detail="Lab not found")
+    
+    update_data = lab_in.model_dump()
+    for field, value in update_data.items():
+        setattr(lab, field, value)
+    
+    await db.commit()
+    await db.refresh(lab)
+    return lab
+
+@router.delete("/{lab_id}")
+async def delete_lab(
+    lab_id: int,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_admin)
+):
+    result = await db.execute(select(Lab).where(Lab.id == lab_id))
+    lab = result.scalars().first()
+    if not lab:
+        raise HTTPException(status_code=404, detail="Lab not found")
+    
+    await db.delete(lab)
+    await db.commit()
+    return {"message": "Lab deleted successfully"}
 
 @router.post("/{lab_id}/assign_assistant")
 async def assign_assistant(

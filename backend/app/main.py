@@ -9,10 +9,10 @@ app = FastAPI(
     openapi_url=f"{settings.API_V1_STR}/openapi.json"
 )
 
-# Configure CORS
+# Configure CORS — reads ALLOWED_ORIGINS from .env (comma-separated)
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost:5173", "http://127.0.0.1:5173"],
+    allow_origins=settings.cors_origins,
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -23,3 +23,9 @@ app.include_router(api_router, prefix=settings.API_V1_STR)
 @app.get("/health")
 async def health_check():
     return {"status": "ok"}
+
+# Also expose health under API prefix for nginx proxy
+@app.get(f"{settings.API_V1_STR}/health")
+async def api_health_check():
+    return {"status": "ok"}
+

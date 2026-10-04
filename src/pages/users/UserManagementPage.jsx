@@ -146,7 +146,7 @@ export const UserManagementPage = () => {
             className={`btn btn-sm ${filterRole === role ? 'btn-primary' : 'btn-secondary'}`}
             style={{ textTransform: 'capitalize' }}
           >
-            {role === 'ALL' ? `All Users (${usersList.length})` : `${role}s (${usersList.filter(u => u.role === role).length})`}
+            {role === 'ALL' ? `All Users (${usersList.length})` : `${role}s (${usersList.filter(u => u.role?.toLowerCase() === role.toLowerCase()).length})`}
           </button>
         ))}
       </div>

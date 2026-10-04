@@ -78,8 +78,8 @@ users = [
     ("Dr. Rajesh Kumar",  "admin@labtrack.edu",            "admin123", "ADMIN"),
     ("Priya Sharma",      "priya.assistant@labtrack.edu",  "asst123",  "ASSISTANT"),
     ("Amit Verma",        "amit.assistant@labtrack.edu",   "asst123",  "ASSISTANT"),
-    ("Prof. Anand Mehta", "anand.faculty@labtrack.edu",    "fac123",   "FACULTY"),
-    ("Dhruveen Patel",    "dhruveen.student@labtrack.edu", "stu123",   "STUDENT"),
+    ("Prof. Anand Mehta", "FCE001@charusat.edu.in",    "fac123",   "FACULTY"),
+    ("Dhruveen Patel",    "24CE001@charusat.edu.in", "stu123",   "STUDENT"),
 ]
 
 for name, email, pw, role in users:

@@ -1,6 +1,6 @@
 from pydantic import BaseModel
 from typing import Optional, List
-from app.db.models import UnitStatusEnum
+from app.db.models import UnitStatusEnum, EquipmentTypeEnum
 
 # Equipment Model Schemas
 class EquipmentModelBase(BaseModel):
@@ -10,11 +10,12 @@ class EquipmentModelBase(BaseModel):
     lab_id: int
 
 class EquipmentModelCreate(EquipmentModelBase):
-    pass
+    equipment_type: Optional[EquipmentTypeEnum] = EquipmentTypeEnum.STANDARD
 
 class EquipmentModelResponse(EquipmentModelBase):
     id: int
     total_quantity: int
+    equipment_type: Optional[EquipmentTypeEnum] = EquipmentTypeEnum.STANDARD
 
     class Config:
         from_attributes = True
@@ -42,3 +43,20 @@ class BulkImportRow(BaseModel):
     category: str
     quantity: int
     description: Optional[str] = None
+
+# --- New schemas for Phase 2 CRUD ---
+class EquipmentModelUpdate(BaseModel):
+    name: Optional[str] = None
+    category: Optional[str] = None
+    description: Optional[str] = None
+    lab_id: Optional[int] = None
+    equipment_type: Optional[EquipmentTypeEnum] = None
+
+class UnitStatusUpdate(BaseModel):
+    status: Optional[UnitStatusEnum] = None
+    condition: Optional[str] = None
+
+class BulkUnitCreate(BaseModel):
+    model_id: int
+    quantity: int
+

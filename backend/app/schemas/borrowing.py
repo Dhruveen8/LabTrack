@@ -44,3 +44,18 @@ class CheckoutRequest(BaseModel):
 class ReturnRequest(BaseModel):
     asset_id: str
     condition_remarks: Optional[str] = None
+
+# --- BE-2: Extension request schema ---
+class ExtensionRequest(BaseModel):
+    new_due_date: datetime
+    reason: Optional[str] = None
+
+# --- Phase 5: Quick-borrow schema ---
+class QuickBorrowRequest(BaseModel):
+    asset_id: str
+    borrower_id: int
+
+class WalkInIssueRequest(BaseModel):
+    asset_id: str
+    borrower_id: int
+    due_date: datetime

@@ -240,101 +240,88 @@ export const LabTrackProvider = ({ children }) => {
   const issueEventAction = async (eventData) => {
     const { eventName, coordinator, totalQty, returnDate } = eventData;
 
-    const notif = await notificationService.addNotification({
+    // Note: addNotification is a no-op stub; backend handles notifications
+    await notificationService.addNotification({
       title: `Club / Event Batch Issue: ${eventName}`,
       message: `${coordinator} checked out ${totalQty} units for university event. Return due: ${returnDate}.`,
       type: 'info',
       category: 'bulk_event_issue',
       targetRoles: ['admin', 'assistant', 'faculty']
     });
-    setNotificationsList(prev => [notif, ...prev]);
 
     addToast(`Event equipment issue recorded for "${eventName}" (${totalQty} units)`, 'success');
-    return notif;
   };
 
   // Redesigned Issue Equipment Action (Single unit - Admin is excluded from single issue alerts)
   const issueEquipmentAction = async (issueData) => {
     const { requestId, equipmentId, unitAssetId, borrowerName, borrowerId, borrowerRole, labId, labName, dueDate } = issueData;
 
-    // 1. Create transaction
-    const txn = await transactionService.issueEquipment({
-      requestId,
-      equipmentId,
-      equipmentName: issueData.equipmentName,
-      unitAssetId,
-      borrowerName,
-      borrowerId,
-      borrowerRole,
-      labId,
-      labName,
-      dueDate
-    });
-    setTransactionsList(prev => [txn, ...prev]);
+    try {
+      // 1. Call checkout endpoint — this atomically marks the unit as ISSUED,
+      //    the request as ISSUED, and creates the transaction record on the backend.
+      const txn = await transactionService.issueEquipment({
+        requestId,
+        equipmentId,
+        equipmentName: issueData.equipmentName,
+        unitAssetId,
+        borrowerName,
+        borrowerId,
+        borrowerRole,
+        labId,
+        labName,
+        dueDate
+      });
+      setTransactionsList(prev => [txn, ...prev]);
 
-    // 2. Mark equipment unit as 'Issued' and update available quantity
-    const updatedEq = await equipmentService.updateUnitStatus(unitAssetId, 'Issued');
-    if (updatedEq) {
-      setEquipmentList(prev => prev.map(e => e.id === updatedEq.id ? updatedEq : e));
+      // 2. Refresh all data to sync UI with backend state
+      //    (unit status, request status, and available quantities are already updated by checkout)
+      await refreshData();
+
+      // 3. Single item checkout alert (no-op stub; backend handles notifications)
+      await notificationService.addNotification({
+        title: 'Equipment Unit Handover Completed',
+        message: `${issueData.equipmentName} (${unitAssetId}) issued to ${borrowerName}. Due: ${dueDate}.`,
+        type: 'info',
+        category: 'single_issue',
+        targetRoles: ['assistant', 'student', 'faculty']
+      });
+
+      addToast(`Successfully scanned & issued unit ${unitAssetId} to ${borrowerName}`, 'success');
+      return txn;
+    } catch (error) {
+      const detail = error.response?.data?.detail || error.message || 'Failed to issue equipment';
+      addToast(detail, 'error');
+      throw error;
     }
-
-    // 3. Update Request status to 'Issued' with unitAssetId link
-    if (requestId) {
-      await requestService.updateRequestStatus(requestId, 'Issued', { unitAssetId });
-    }
-
-    // Call refreshData to ensure all UI states (including enriched names/titles) sync perfectly
-    await refreshData();
-
-    // Single item checkout alert (Assistant & Student/Faculty only - NOT Admin)
-    const notif = await notificationService.addNotification({
-      title: 'Equipment Unit Handover Completed',
-      message: `${issueData.equipmentName} (${unitAssetId}) issued to ${borrowerName}. Due: ${dueDate}.`,
-      type: 'info',
-      category: 'single_issue',
-      targetRoles: ['assistant', 'student', 'faculty']
-    });
-    setNotificationsList(prev => [notif, ...prev]);
-
-    addToast(`Successfully scanned & issued unit ${unitAssetId} to ${borrowerName}`, 'success');
-    return txn;
   };
 
   // Return Equipment Action (Single return - Assistant & Borrower only)
   const returnEquipmentAction = async (transactionId, assetId, condition, remarks) => {
-    const updatedTxn = await transactionService.returnEquipment(transactionId, assetId, condition, remarks);
-    setTransactionsList(prev => prev.map(t => t.id === transactionId ? updatedTxn : t));
-
-    if (updatedTxn) {
-      // 1. Mark unit back to 'Available' with inspected condition
-      if (updatedTxn.unitAssetId) {
-        const updatedEq = await equipmentService.updateUnitStatus(updatedTxn.unitAssetId, 'Available', condition);
-        if (updatedEq) {
-          setEquipmentList(prev => prev.map(e => e.id === updatedEq.id ? updatedEq : e));
-        }
-      }
-
-      // 2. Mark request as 'Returned'
-      if (updatedTxn.requestId) {
-        await requestService.updateRequestStatus(updatedTxn.requestId, 'Returned');
-      }
+    try {
+      // The /return endpoint atomically marks transaction as RETURNED,
+      // unit as AVAILABLE, and request as RETURNED on the backend.
+      const updatedTxn = await transactionService.returnEquipment(transactionId, assetId, condition, remarks);
+      setTransactionsList(prev => prev.map(t => t.id === transactionId ? updatedTxn : t));
 
       // Sync all lists from backend to preserve UI fields
       await refreshData();
 
-      // Single item return alert
-      const notif = await notificationService.addNotification({
+      // Single item return alert (no-op stub; backend handles notifications)
+      await notificationService.addNotification({
         title: 'Equipment Unit Restocked',
-        message: `${updatedTxn.equipmentName} (${updatedTxn.unitAssetId || transactionId}) returned by ${updatedTxn.borrowerName}. Condition: ${condition}.`,
+        message: `${updatedTxn?.equipmentName || 'Equipment'} (${assetId}) returned. Condition: ${condition}.`,
         type: 'success',
         category: 'single_return',
         targetRoles: ['assistant', 'student', 'faculty']
       });
-      setNotificationsList(prev => [notif, ...prev]);
-    }
 
-    addToast('Equipment successfully verified & returned to available inventory', 'success');
-    return updatedTxn;
+      addToast('Equipment successfully verified & returned to available inventory', 'success');
+      return updatedTxn;
+    } catch (error) {
+      const detail = error.response?.data?.detail || error.message || 'Failed to return equipment';
+      addToast(detail, 'error');
+      throw error;
+    }
   };
 
   // Request Actions (Students/Faculty create, Assistant approves/rejects)
@@ -368,14 +355,14 @@ export const LabTrackProvider = ({ children }) => {
     
     setRequestsList(prev => [enrichedReq, ...prev]);
 
-    const notif = await notificationService.addNotification({
+    // Notification stub (backend handles notifications)
+    await notificationService.addNotification({
       title: 'New Equipment Reservation Request',
       message: `${data.requesterName} submitted a request for ${data.equipmentName} (${data.labName}).`,
       type: 'info',
       category: 'single_request',
       targetRoles: ['assistant']
     });
-    setNotificationsList(prev => [notif, ...prev]);
 
     addToast('Equipment reservation request submitted for Assistant review', 'success');
     return enrichedReq;
@@ -401,15 +388,14 @@ export const LabTrackProvider = ({ children }) => {
   };
 
   const approveExtensionAction = async (requestId, transactionId, newDueDate) => {
-    // 1. Update request status to Extended
+    // 1. Update request status to Extended (Backend also extends the transaction automatically)
     const updatedReq = await requestService.approveExtension(requestId);
     setRequestsList(prev => prev.map(r => r.id === requestId ? updatedReq : r));
 
-    // 2. Extend transaction due date directly without QR scanning
+    // 2. Optimistically update transaction due date directly in state
     const targetDueDate = newDueDate || updatedReq.requiredUntil;
     if (transactionId) {
-      const updatedTxn = await transactionService.extendDueDate(transactionId, targetDueDate);
-      setTransactionsList(prev => prev.map(t => t.id === transactionId ? updatedTxn : t));
+      setTransactionsList(prev => prev.map(t => t.id === transactionId ? { ...t, dueDate: targetDueDate } : t));
     }
 
     addToast(`Extension approved! Due date updated to ${targetDueDate}. No QR re-scan needed.`, 'success');
@@ -421,14 +407,14 @@ export const LabTrackProvider = ({ children }) => {
     const newTrf = await requestService.createTransfer(data);
     setTransfersList(prev => [newTrf, ...prev]);
 
-    const notif = await notificationService.addNotification({
+    // Notification stub (backend handles notifications)
+    await notificationService.addNotification({
       title: 'Inter-Laboratory Transfer Initialized',
       message: `Transfer requested: ${data.equipmentName} from ${data.owningLab} to ${data.requestingLab}.`,
       type: 'info',
       category: 'inter_lab_transfer',
       targetRoles: ['admin', 'assistant', 'faculty']
     });
-    setNotificationsList(prev => [notif, ...prev]);
 
     addToast('Inter-Lab Transfer request initialized', 'success');
     return newTrf;

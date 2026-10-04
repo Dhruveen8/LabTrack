@@ -1,14 +1,20 @@
-import { SMART_PROCUREMENT_DATA } from '../data/mockData';
-
-let procurementStore = [...SMART_PROCUREMENT_DATA];
+import apiClient from '../api/client';
 
 export const procurementService = {
   getRecommendations: async () => {
-    return [...procurementStore];
+    try {
+      const response = await apiClient.get('/analytics/procurement/suggestions');
+      return response.data.map((item, index) => ({
+        id: `REC-${index + 1}`,
+        model: item.name,
+        category: 'Equipment',
+        suggestedQuantity: parseInt(item.suggestion.replace(/\D/g, '')) || 5,
+        reason: item.reason,
+        status: 'pending'
+      }));
+    } catch (e) {
+      console.error('Error fetching procurement suggestions', e);
+      return [];
+    }
   },
-
-  updateItem: async (id, updated) => {
-    procurementStore = procurementStore.map(item => item.id === id ? { ...item, ...updated } : item);
-    return procurementStore.find(item => item.id === id);
-  }
 };

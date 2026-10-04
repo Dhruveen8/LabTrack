@@ -55,15 +55,21 @@ export const labService = {
   },
 
   update: async (id, data) => {
-    // Note: Backend might not have PUT /labs/{id} yet, this is a placeholder
-    console.warn('Update lab not fully implemented on backend');
-    return { ...data, id };
+    try {
+      const response = await apiClient.put(`/labs/${id}`, data);
+      return response.data;
+    } catch (e) {
+      throw e;
+    }
   },
 
   delete: async (id) => {
-    // Note: Backend might not have DELETE /labs/{id} yet
-    console.warn('Delete lab not fully implemented on backend');
-    return { success: true };
+    try {
+      const response = await apiClient.delete(`/labs/${id}`);
+      return response.data;
+    } catch (e) {
+      throw e;
+    }
   },
 
   assignAssistant: async (labId, assistantUserId, assistantName) => {
@@ -77,20 +83,15 @@ export const labService = {
     }
   },
 
+  // --- FE-5: Use real stats from backend ---
   getStats: async () => {
     try {
+      const response = await apiClient.get('/inventory/stats');
       const labs = await labService.getAll();
-      // For now, these are derived mock stats as the real backend 
-      // doesn't aggregate equipment counts per lab in the lab model yet.
-      return { 
-        totalEquipment: labs.length * 20, 
-        available: labs.length * 15, 
-        borrowed: labs.length * 3, 
-        maintenance: labs.length * 2, 
-        totalLabs: labs.length 
-      };
+      return { ...response.data, totalLabs: labs.length };
     } catch (e) {
       return { totalEquipment: 0, available: 0, borrowed: 0, maintenance: 0, totalLabs: 0 };
     }
   }
 };
+

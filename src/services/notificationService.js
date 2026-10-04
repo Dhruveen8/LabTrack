@@ -1,80 +1,52 @@
-import { INITIAL_NOTIFICATIONS } from '../data/mockData';
-
-const NOTIF_STORAGE_KEY = 'labtrack_notifications';
-
-const getInitialData = () => {
-  const saved = localStorage.getItem(NOTIF_STORAGE_KEY);
-  if (saved) {
-    try { return JSON.parse(saved); } catch (e) { /* fallback */ }
-  }
-  return [...INITIAL_NOTIFICATIONS];
-};
-
-let notificationStore = getInitialData();
-
-const persist = () => {
-  try {
-    localStorage.setItem(NOTIF_STORAGE_KEY, JSON.stringify(notificationStore));
-  } catch (e) {
-    console.error('Failed to persist notifications to localStorage', e);
-  }
-};
+import apiClient from '../api/client';
 
 export const notificationService = {
   getAll: async () => {
-    return [...notificationStore];
+    try {
+      const response = await apiClient.get('/notifications/');
+      return response.data;
+    } catch (e) {
+      console.error('Error fetching notifications', e);
+      return [];
+    }
   },
 
   getForRole: async (role = 'student') => {
-    return notificationStore.filter(n => {
-      // If notification has specific targetRoles, check inclusion
-      if (n.targetRoles && n.targetRoles.length > 0) {
-        if (!n.targetRoles.includes(role)) return false;
-      }
-
-      // Admin policy: Admin only receives major events (equipment additions, bulk imports, club/event issues, transfers, system alerts)
-      if (role === 'admin') {
-        const adminAllowedCategories = [
-          'equipment_addition',
-          'bulk_import',
-          'bulk_event_issue',
-          'inter_lab_transfer',
-          'system'
-        ];
-        if (n.category && !adminAllowedCategories.includes(n.category)) {
-          return false;
-        }
-      }
-
-      return true;
-    });
+    // The backend now filters by current_user.id, so we just get all for this user
+    return await notificationService.getAll();
   },
 
   markAsRead: async (id) => {
-    notificationStore = notificationStore.map(n => n.id === id ? { ...n, read: true } : n);
-    persist();
-    return [...notificationStore];
+    try {
+      await apiClient.patch(`/notifications/${id}/read`);
+      return await notificationService.getAll();
+    } catch (e) {
+      console.error('Error marking notification read', e);
+      return [];
+    }
   },
 
   markAllAsRead: async () => {
-    notificationStore = notificationStore.map(n => ({ ...n, read: true }));
-    persist();
-    return [...notificationStore];
+    try {
+      await apiClient.post('/notifications/mark-all-read');
+      return await notificationService.getAll();
+    } catch (e) {
+      console.error('Error marking all notifications read', e);
+      return [];
+    }
   },
 
-  addNotification: async ({ title, message, type = 'info', category = 'system', targetRoles = ['admin', 'assistant', 'faculty', 'student'] }) => {
-    const newNotif = {
-      id: `NTF-${Date.now()}`,
-      title,
-      message,
-      timestamp: 'Just now',
-      type,
-      category,
-      targetRoles,
-      read: false
-    };
-    notificationStore.unshift(newNotif);
-    persist();
-    return newNotif;
+  getUnreadCount: async () => {
+    try {
+      const response = await apiClient.get('/notifications/unread-count');
+      return response.data.unreadCount;
+    } catch (e) {
+      return 0;
+    }
+  },
+
+  addNotification: async (data) => {
+    console.warn('Frontend should not manually add notifications anymore. Backend handles it.');
+    return null;
   }
 };
