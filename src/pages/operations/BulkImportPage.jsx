@@ -5,11 +5,11 @@ import { QRPrintSheet } from '../../components/scanner/QRPrintSheet';
 import { useLabTrack } from '../../context/LabTrackContext';
 import { useAuth } from '../../context/AuthContext';
 import { Upload, Download, Sparkles } from 'lucide-react';
-import Papa from 'papaparse';
+import * as XLSX from 'xlsx';
 
 export const BulkImportPage = () => {
   const { user } = useAuth();
-  const { labsList, bulkAddEquipment } = useLabTrack();
+  const { labsList, bulkImportExcelEquipment } = useLabTrack();
   const fileInputRef = useRef(null);
 
   const [selectedFile, setSelectedFile] = useState(null);
@@ -19,43 +19,40 @@ export const BulkImportPage = () => {
   const [isImporting, setIsImporting] = useState(false);
   const [isDragging, setIsDragging] = useState(false);
 
-  const processFile = (file) => {
+  const processFile = async (file) => {
     if (!file) return;
 
     setSelectedFile(file.name);
     
-    Papa.parse(file, {
-      header: true,
-      skipEmptyLines: true,
-      complete: (results) => {
-        const parsed = results.data.map(row => {
-          const qty = parseInt(row.quantity, 10) || 1;
-          
-          // Match lab ID/Code/Name to the actual lab in the database
-          const targetLab = labsList.find(l => 
-            String(l.id) === String(row.labId).trim() || 
-            (l.code && l.code.toLowerCase() === String(row.labId).trim().toLowerCase()) ||
-            l.name.toLowerCase() === String(row.labId).trim().toLowerCase()
-          );
+    try {
+      const data = await file.arrayBuffer();
+      const workbook = XLSX.read(data, { type: 'array' });
+      const firstSheetName = workbook.SheetNames[0];
+      const worksheet = workbook.Sheets[firstSheetName];
+      const json = XLSX.utils.sheet_to_json(worksheet);
 
-          return {
-            name: row.name || 'Unknown Equipment',
-            category: row.category || 'GEN',
-            labId: targetLab ? targetLab.id : row.labId, // if not found, keep string to fail validation
-            labName: targetLab ? targetLab.name : `Not Found (${row.labId})`,
-            quantity: qty,
-            condition: row.condition || 'Excellent',
-            serialNumber: row.serialNumber || '',
-            description: row.description || '',
-            valid: !!targetLab && !!row.name && qty > 0
-          };
-        });
-        setPreviewData(parsed);
-      },
-      error: (error) => {
-        alert('Error parsing CSV file: ' + error.message);
-      }
-    });
+      const parsed = json.map(row => {
+        const name = row['Equipment Model / Name'] || row.name || '';
+        const qty = parseInt(row['Quantity of Units'] || row.quantity, 10) || 1;
+        const category = row['Category'] || row.category || 'GEN';
+        const serialPrefix = row['Manufacturer Serial No. Prefix'] || row.serialPrefix || '';
+        const condition = row['Initial Physical Condition'] || row.condition || 'Excellent';
+        const description = row['Description / Specifications'] || row.description || '';
+
+        return {
+          name,
+          category,
+          quantity: qty,
+          serial_prefix: serialPrefix,
+          condition,
+          description,
+          valid: !!name && qty > 0
+        };
+      });
+      setPreviewData(parsed);
+    } catch (e) {
+      alert('Error parsing Excel file: ' + e.message);
+    }
   };
 
   const handleFileSelect = (e) => {
@@ -87,49 +84,65 @@ export const BulkImportPage = () => {
 
     setIsImporting(true);
     try {
-      const createdItems = await bulkAddEquipment(validItems);
+      // The API doesn't need labId from frontend since it uses logged in user context
+      const response = await bulkImportExcelEquipment(validItems, null);
 
-      // Collect all generated units for QR printing
-      const allUnits = [];
-      createdItems.forEach(item => {
-        if (item.units) {
-          allUnits.push(...item.units);
-        }
-      });
-
-      setImportedUnits(allUnits);
-      setShowPrintSheet(true);
+      if (response && response.units) {
+        setImportedUnits(response.units);
+        setShowPrintSheet(true);
+      }
     } catch (e) {
-      console.error(e);
-      alert('An error occurred during bulk import');
+      console.error("Import error:", e);
+      let errMsg = 'An error occurred during bulk import';
+      if (e.response?.data?.detail) {
+        if (typeof e.response.data.detail === 'string') {
+          errMsg = e.response.data.detail;
+        } else if (Array.isArray(e.response.data.detail)) {
+          errMsg = e.response.data.detail.map(err => `${err.loc.join('.')}: ${err.msg}`).join(', ');
+        } else {
+          errMsg = JSON.stringify(e.response.data.detail);
+        }
+      } else if (e.message) {
+        errMsg = e.message;
+      }
+      alert(`Error: ${errMsg}`);
     } finally {
       setIsImporting(false);
     }
   };
 
-  const downloadSampleCSV = (e) => {
+  const downloadSampleExcel = (e) => {
     e.stopPropagation();
-    // Use the actual lab code from the first lab in the system, or fallback
-    const sampleLabCode = labsList.length > 0 ? (labsList[0].code || labsList[0].id) : 'LAB-IOT';
     
-    const csvContent = "data:text/csv;charset=utf-8," +
-      "name,category,labId,quantity,condition,serialNumber,description\n" +
-      `"Arduino Uno R3 Kit","Microcontrollers","${sampleLabCode}",10,"Excellent","ARD-UNO","ATmega328P kit"\n` +
-      `"Digital Multimeter","Testing & Measurement","${sampleLabCode}",5,"Good","FLU-87","Industrial DMM"`;
-    
-    const encodedUri = encodeURI(csvContent);
-    const link = document.createElement("a");
-    link.setAttribute("href", encodedUri);
-    link.setAttribute("download", "labtrack_bulk_import_template.csv");
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
+    const data = [
+      {
+        'Equipment Model / Name': 'Arduino Uno R3 Kit',
+        'Quantity of Units': 10,
+        'Category': 'Microcontrollers',
+        'Manufacturer Serial No. Prefix': 'ARD-UNO',
+        'Initial Physical Condition': 'Excellent',
+        'Description / Specifications': 'ATmega328P kit'
+      },
+      {
+        'Equipment Model / Name': 'Digital Multimeter',
+        'Quantity of Units': 5,
+        'Category': 'Testing & Measurement',
+        'Manufacturer Serial No. Prefix': 'FLU-87',
+        'Initial Physical Condition': 'Good',
+        'Description / Specifications': 'Industrial DMM'
+      }
+    ];
+
+    const ws = XLSX.utils.json_to_sheet(data);
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, ws, "Equipment");
+    XLSX.writeFile(wb, "labtrack_bulk_import_template.xlsx");
   };
 
   const columns = [
     { header: 'Equipment Model', accessor: 'name' },
     { header: 'Category', accessor: 'category' },
-    { header: 'Target Laboratory', accessor: 'labName' },
+    { header: 'Serial Prefix', accessor: 'serial_prefix' },
     {
       header: 'Units Qty',
       accessor: 'quantity',
@@ -143,7 +156,7 @@ export const BulkImportPage = () => {
       header: 'Validation',
       cell: (row) => (
         <span className={`badge ${row.valid ? 'badge-success' : 'badge-danger'}`}>
-          {row.valid ? '✓ Ready to Generate Asset IDs' : 'Invalid Lab or Model'}
+          {row.valid ? '✓ Ready to Generate Asset IDs' : 'Invalid Model or Quantity'}
         </span>
       )
     }
@@ -154,14 +167,14 @@ export const BulkImportPage = () => {
   return (
     <div>
       <PageHeader
-        title="Bulk Equipment CSV Import"
-        subtitle="Upload spreadsheet batches to register equipment. The system automatically creates unique unit Asset IDs & printable QR tags."
+        title="Bulk Equipment Excel Import"
+        subtitle="Upload spreadsheet batches to register equipment. The system automatically creates unique unit Asset IDs & printable QR tags based on your assigned laboratory."
       />
 
       <div className="portal-card">
         <input 
           type="file" 
-          accept=".csv" 
+          accept=".xlsx, .xls" 
           ref={fileInputRef} 
           style={{ display: 'none' }} 
           onChange={handleFileSelect} 
@@ -184,13 +197,13 @@ export const BulkImportPage = () => {
         >
           <Upload size={36} color="#1e40af" style={{ marginBottom: '0.5rem' }} />
           <h3 style={{ fontSize: '1.1rem', fontWeight: 700, color: '#0f172a' }}>
-            {selectedFile ? `Loaded: ${selectedFile}` : 'Click to Select or Drag & Drop Equipment CSV File'}
+            {selectedFile ? `Loaded: ${selectedFile}` : 'Click to Select or Drag & Drop Equipment Excel File (.xlsx)'}
           </h3>
           <p style={{ fontSize: '0.85rem', color: '#64748b', margin: '0.25rem 0 1rem' }}>
-            {selectedFile ? 'Review records and click "Import Records & Generate QR Labels" below' : 'Select a .csv file to import batches of equipment'}
+            {selectedFile ? 'Review records and click "Import Records & Generate QR Labels" below' : 'Select an Excel file to import batches of equipment'}
           </p>
-          <button className="btn btn-secondary btn-sm" onClick={downloadSampleCSV}>
-            <Download size={14} /> Download Sample CSV Template
+          <button className="btn btn-secondary btn-sm" onClick={downloadSampleExcel}>
+            <Download size={14} /> Download Sample Excel Template
           </button>
         </div>
 
@@ -239,3 +252,4 @@ export const BulkImportPage = () => {
     </div>
   );
 };
+

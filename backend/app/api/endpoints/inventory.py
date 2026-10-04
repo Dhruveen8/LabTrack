@@ -8,7 +8,8 @@ from app.db.database import get_db
 from app.db.models import EquipmentModel, EquipmentUnit, Lab, Department, RoleEnum, User, UnitStatusEnum, Transaction, TransactionStatusEnum
 from app.schemas.inventory import (
     EquipmentModelCreate, EquipmentModelResponse, EquipmentModelUpdate,
-    EquipmentUnitCreate, EquipmentUnitResponse, BulkUnitCreate, UnitStatusUpdate
+    EquipmentUnitCreate, EquipmentUnitResponse, BulkUnitCreate, UnitStatusUpdate,
+    BulkExcelImportRequest, BulkExcelImportRow
 )
 from app.api.deps import require_role, get_current_user, require_admin
 
@@ -121,7 +122,6 @@ async def create_equipment_unit(
     stmt = (
         select(func.max(EquipmentUnit.asset_id))
         .where(EquipmentUnit.asset_id.like(f"{prefix}%"))
-        .with_for_update()
     )
     max_id_result = await db.execute(stmt)
     max_id = max_id_result.scalar()
@@ -221,7 +221,6 @@ async def bulk_create_units(
     stmt = (
         select(func.max(EquipmentUnit.asset_id))
         .where(EquipmentUnit.asset_id.like(f"{prefix}%"))
-        .with_for_update()
     )
     max_id_result = await db.execute(stmt)
     max_id = max_id_result.scalar()
@@ -250,6 +249,108 @@ async def bulk_create_units(
     for unit in created_units:
         await db.refresh(unit)
     return created_units
+
+# --- Excel Bulk Import ---
+@router.post("/import_excel")
+async def import_excel_equipment(
+    import_data: BulkExcelImportRequest,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    if current_user.role not in [RoleEnum.ADMIN, RoleEnum.ASSISTANT]:
+        raise HTTPException(status_code=403, detail="Not authorized")
+        
+    lab_id = None
+    if current_user.role == RoleEnum.ASSISTANT:
+        if not current_user.assigned_labs:
+            raise HTTPException(status_code=403, detail="Assistant is not assigned to any lab.")
+        lab_id = int(current_user.assigned_labs[0])
+    else: # ADMIN
+        if current_user.assigned_labs:
+            lab_id = int(current_user.assigned_labs[0])
+        else:
+            lab_result = await db.execute(select(Lab).limit(1))
+            first_lab = lab_result.scalars().first()
+            if not first_lab:
+                raise HTTPException(status_code=404, detail="No labs exist.")
+            lab_id = first_lab.id
+
+    # Verify lab
+    lab_result = await db.execute(select(Lab).where(Lab.id == lab_id))
+    lab = lab_result.scalars().first()
+    if not lab:
+        raise HTTPException(status_code=404, detail="Lab not found")
+
+    lab_code = (lab.code or lab.name.split()[0][:4]).upper()
+    
+    total_models = 0
+    total_units = 0
+    created_units_response = []
+    
+    try:
+        for item in import_data.items:
+            eq_model = EquipmentModel(
+                name=item.name,
+                category=item.category,
+                description=item.description,
+                lab_id=lab_id,
+                total_quantity=item.quantity
+            )
+            db.add(eq_model)
+            await db.flush()
+            
+            cat_code = eq_model.category.upper()[:2]
+            prefix = f"LT-{lab_code}-{cat_code}-"
+            
+            stmt = (
+                select(func.max(EquipmentUnit.asset_id))
+                .where(EquipmentUnit.asset_id.like(f"{prefix}%"))
+            )
+            max_id_result = await db.execute(stmt)
+            max_id = max_id_result.scalar()
+            
+            if max_id:
+                next_seq = int(max_id.split("-")[-1]) + 1
+            else:
+                next_seq = 1
+                
+            for i in range(item.quantity):
+                asset_id = f"{prefix}{next_seq + i:05d}"
+                unit = EquipmentUnit(
+                    asset_id=asset_id,
+                    model_id=eq_model.id,
+                    serial_number=f"{item.serial_prefix}-{i+1}" if item.serial_prefix else None,
+                    condition=item.condition or "New",
+                    status=UnitStatusEnum.AVAILABLE
+                )
+                db.add(unit)
+                created_units_response.append(unit)
+            
+            total_models += 1
+            total_units += item.quantity
+            
+        # Serialize units before commit to avoid MissingGreenlet lazy-loading errors
+        serialized_units = [
+            {
+                "assetId": u.asset_id,
+                "status": u.status.value if hasattr(u.status, 'value') else u.status,
+                "condition": u.condition,
+                "serialNumber": u.serial_number,
+                "qrCodeUrl": u.qr_code_url
+            } for u in created_units_response
+        ]
+            
+        await db.commit()
+    except Exception as e:
+        await db.rollback()
+        raise HTTPException(status_code=500, detail=str(e))
+        
+    return {
+        "success": True, 
+        "modelsCreated": total_models, 
+        "unitsCreated": total_units,
+        "units": serialized_units
+    }
 
 # --- Stats endpoint ---
 @router.get("/stats")

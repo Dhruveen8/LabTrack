@@ -60,3 +60,16 @@ class BulkUnitCreate(BaseModel):
     model_id: int
     quantity: int
 
+# --- Schemas for Excel Bulk Import ---
+class BulkExcelImportRow(BaseModel):
+    name: str
+    quantity: int
+    category: str
+    serial_prefix: Optional[str] = None
+    condition: Optional[str] = None
+    description: Optional[str] = None
+
+class BulkExcelImportRequest(BaseModel):
+    items: List[BulkExcelImportRow]
+    lab_id: Optional[int] = None
+

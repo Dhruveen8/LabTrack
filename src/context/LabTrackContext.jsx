@@ -223,6 +223,27 @@ export const LabTrackProvider = ({ children }) => {
     return createdItems;
   };
 
+  const bulkImportExcelEquipment = async (itemsList, labId) => {
+    const response = await equipmentService.bulkImportExcel({ items: itemsList, lab_id: labId });
+    // After success, we need to refresh the equipment list
+    const newItems = await equipmentService.getAll();
+    setEquipmentList(newItems);
+
+    const notif = await notificationService.addNotification({
+      title: 'Bulk Excel Import Completed',
+      message: `Successfully imported ${response.modelsCreated} models (${response.unitsCreated} total units) via Excel.`,
+      type: 'success',
+      category: 'bulk_import',
+      targetRoles: ['admin', 'assistant']
+    });
+    if (notif) {
+      setNotificationsList(prev => [notif, ...prev]);
+    }
+
+    addToast(`Successfully imported ${response.modelsCreated} models with ${response.unitsCreated} units!`, 'success');
+    return response;
+  };
+
   const updateEquipment = async (id, data) => {
     const updated = await equipmentService.update(id, data);
     setEquipmentList(prev => prev.map(item => item.id === id ? updated : item));
@@ -462,6 +483,7 @@ export const LabTrackProvider = ({ children }) => {
         assignAssistantToLab,
         addEquipment,
         bulkAddEquipment,
+        bulkImportExcelEquipment,
         updateEquipment,
         deleteEquipment,
         issueEventAction,

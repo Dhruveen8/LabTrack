@@ -115,6 +115,15 @@ export const equipmentService = {
     return createdItems;
   },
 
+  bulkImportExcel: async (payload) => {
+    try {
+      const response = await apiClient.post('/inventory/import_excel', payload);
+      return response.data;
+    } catch (e) {
+      throw e;
+    }
+  },
+
   update: async (id, updatedData) => {
     try {
       const response = await apiClient.put(`/inventory/models/${id}`, updatedData);
