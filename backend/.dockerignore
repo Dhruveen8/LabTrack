@@ -1,0 +1,57 @@
+# Python artifacts
+__pycache__/
+*.py[cod]
+*$py.class
+*.pyc
+*.pyo
+*.egg
+*.egg-info/
+dist/
+build/
+.eggs/
+
+# Virtual environments
+venv/
+.venv/
+env/
+.env.local
+ENV/
+
+# Environment / secrets — NEVER ship these in an image
+.env
+*.env
+client_secret*.json
+google-client*.json
+gmail-credentials*.json
+!.env.example
+
+# IDE and OS files
+.idea/
+.vscode/
+*.swp
+*.swo
+.DS_Store
+Thumbs.db
+
+# Test and coverage artifacts
+.pytest_cache/
+htmlcov/
+.coverage
+coverage.xml
+
+# Git
+.git/
+.gitignore
+
+# Alembic migrations backup (keep versions/)
+# alembic/versions/ intentionally NOT excluded
+
+# Development / local scripts
+populate_realistic_data.py
+setup_gmail.py
+test_workflow.py
+new_implementation.txt
+
+# Logs
+*.log
+logs/

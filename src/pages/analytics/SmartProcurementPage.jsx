@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { PageHeader } from '../../components/common/PageHeader';
 import { procurementService } from '../../services/procurementService';
 import { BrainCircuit, Sparkles, ShoppingBag } from 'lucide-react';
-import { useToast } from '../../context/ToastContext';
+import { useToast } from '../../context/hooks';
 
 export const SmartProcurementPage = () => {
   const { addToast } = useToast();
@@ -23,7 +23,7 @@ export const SmartProcurementPage = () => {
       }
     };
     fetchRecommendations();
-  }, []);
+  }, [addToast]);
 
   const handleGeneratePO = (item) => {
     addToast(`🛒 Purchase order draft created for ${item.suggestedQuantity}x ${item.model}`, 'success', 4000);
@@ -71,8 +71,8 @@ export const SmartProcurementPage = () => {
                 </p>
               </div>
 
-              <button 
-                className="btn btn-primary btn-sm" 
+              <button
+                className="btn btn-primary btn-sm"
                 style={{ width: '100%' }} 
                 onClick={() => handleGeneratePO(item)}
               >

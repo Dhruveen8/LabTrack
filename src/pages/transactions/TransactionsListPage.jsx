@@ -1,11 +1,11 @@
+import { useLabTrack, useAuth } from '../../context/hooks';
+import { formatDate } from '../../utils/dateFormat';
 import React from 'react';
 import { PageHeader } from '../../components/common/PageHeader';
 import { DataTable } from '../../components/common/DataTable';
 import { StatusBadge } from '../../components/common/StatusBadge';
-import { useLabTrack } from '../../context/LabTrackContext';
-import { useAuth } from '../../context/AuthContext';
 import { Link } from 'react-router-dom';
-import { RefreshCw, QrCode, ArrowRight, ShieldCheck, CheckCircle2 } from 'lucide-react';
+import { RefreshCw, QrCode } from 'lucide-react';
 
 export const TransactionsListPage = () => {
   const { user } = useAuth();
@@ -17,7 +17,7 @@ export const TransactionsListPage = () => {
   let visibleTxns = transactionsList;
   if (isStudentOrFaculty) {
     visibleTxns = transactionsList.filter(
-      t => t.borrowerId === user.universityId || t.borrowerName === user.name
+      t => t.borrowerId === user.id
     );
   } else if (isAssistant && user?.assignedLabIds?.length > 0) {
     visibleTxns = transactionsList.filter(t => user.assignedLabIds.includes(t.labId));
@@ -62,11 +62,11 @@ export const TransactionsListPage = () => {
       cell: (row) => (
         <div>
           <div style={{ fontSize: '0.85rem', color: row.status === 'Overdue' ? '#dc2626' : '#0f172a', fontWeight: 600 }}>
-            Due: {row.dueDate}
+            Due: {formatDate(row.dueDate)}
           </div>
           {row.returnDate && (
             <div style={{ fontSize: '0.75rem', color: '#15803d', fontWeight: 600 }}>
-              Returned: {row.returnDate}
+              Returned: {formatDate(row.returnDate)}
             </div>
           )}
           {row.reissuedCount > 0 && (

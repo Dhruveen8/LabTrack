@@ -1,9 +1,9 @@
+import { useLabTrack, useAuth } from '../../context/hooks';
+import { formatDate } from '../../utils/dateFormat';
 import React, { useState } from 'react';
 import { useParams, useNavigate, Link } from 'react-router-dom';
 import { PageHeader } from '../../components/common/PageHeader';
-import { useLabTrack } from '../../context/LabTrackContext';
-import { useAuth } from '../../context/AuthContext';
-import { RefreshCw, ArrowLeft, Calendar, AlertCircle, CheckCircle2 } from 'lucide-react';
+import { RefreshCw, ArrowLeft, AlertCircle } from 'lucide-react';
 
 export const ExtendRequestPage = () => {
   const { transactionId } = useParams();
@@ -11,8 +11,9 @@ export const ExtendRequestPage = () => {
   const { user } = useAuth();
   const { transactionsList, requestsList, requestExtensionAction, systemSettings } = useLabTrack();
 
-  // Find transaction
-  const txn = transactionsList.find(t => t.id === transactionId || t.unitAssetId === transactionId) || transactionsList[0];
+  // FIX: useParams() returns strings but transaction IDs are numbers \u2014 coerce before comparing
+  const txnIdNum = Number(transactionId);
+  const txn = transactionsList.find(t => t.id === txnIdNum || t.unitAssetId === transactionId) || transactionsList[0];
   const linkedReq = requestsList.find(r => r.id === txn?.requestId || (r.equipmentId === txn?.equipmentId && r.requesterId === txn?.borrowerId));
 
   const userRole = user?.role || txn?.borrowerType || 'student';
@@ -53,7 +54,7 @@ export const ExtendRequestPage = () => {
     }
 
     if (newDueObj > new Date(maxAllowedEndDate)) {
-      setErrorMsg(`Cannot extend beyond configured max period of ${maxDaysTotal} days (${maxAllowedEndDate}).`);
+      setErrorMsg(`Cannot extend beyond configured max period of ${maxDaysTotal} days (${formatDate(maxAllowedEndDate)}).`);
       return;
     }
 
@@ -106,19 +107,19 @@ export const ExtendRequestPage = () => {
 
           <div>
             <div style={{ fontSize: '0.75rem', color: '#64748b', fontWeight: 600 }}>ORIGINAL ISSUE DATE</div>
-            <div style={{ fontSize: '0.9rem', fontWeight: 600, color: '#334155' }}>{txn.issueDate}</div>
+            <div style={{ fontSize: '0.9rem', fontWeight: 600, color: '#334155' }}>{formatDate(txn.issueDate)}</div>
           </div>
 
           <div>
             <div style={{ fontSize: '0.75rem', color: '#64748b', fontWeight: 600 }}>CURRENT DUE DATE</div>
-            <div style={{ fontSize: '0.9rem', fontWeight: 700, color: '#dc2626' }}>{txn.dueDate}</div>
+            <div style={{ fontSize: '0.9rem', fontWeight: 700, color: '#dc2626' }}>{formatDate(txn.dueDate)}</div>
           </div>
         </div>
 
         <form onSubmit={handleSubmit}>
           <div className="form-group">
             <label className="form-label">
-              Requested Extended Due Date (Configured Max: {maxAllowedEndDate})
+              Requested Extended Due Date (Configured Max: {formatDate(maxAllowedEndDate)})
             </label>
             <input
               type="date"

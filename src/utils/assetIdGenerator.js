@@ -62,7 +62,7 @@ export const generateBulkAssetIds = (labId, labName, categoryName, quantity = 1,
   const labCode = getLabCode(labId, labName);
   const catCode = getCategoryCode(categoryName);
   const startSeq = getNextSequenceNumber(labCode, catCode, existingEquipmentList);
-  
+
   const ids = [];
   for (let i = 0; i < quantity; i++) {
     const seqFormatted = String(startSeq + i).padStart(5, '0');

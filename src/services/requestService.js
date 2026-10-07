@@ -8,6 +8,8 @@ export const requestService = {
       return response.data.map(req => ({
         id: req.id,
         requesterId: req.requester_id,
+        requesterName: req.requester_name,
+        requesterRole: req.requester_role?.toLowerCase(),
         equipmentId: req.model_id,
         labId: req.lab_id,
         requestDate: req.required_from,
@@ -15,6 +17,9 @@ export const requestService = {
         requiredUntil: req.required_until,
         status: req.status.split('_').map(w => w.charAt(0).toUpperCase() + w.slice(1).toLowerCase()).join(' '),
         unitAssetId: null,
+        kind: req.kind,
+        quantity: req.quantity,
+        purpose: req.purpose,
         // Keep raw fields too for compatibility
         requester_id: req.requester_id,
         model_id: req.model_id,
@@ -48,52 +53,39 @@ export const requestService = {
     const payload = {
       model_id: parseInt(data.modelId || data.equipmentId),
       required_from: data.requiredFrom || new Date().toISOString(),
-      required_until: data.requiredUntil || data.dueDate
+      required_until: data.requiredUntil || data.dueDate,
+      kind: data.kind || 'STANDARD',
+      quantity: parseInt(data.quantity) || 1,
+      purpose: data.purpose || 'Academic Request'
     };
-    try {
-      const response = await apiClient.post('/borrowing/requests', payload);
-      return response.data;
-    } catch (e) {
-      throw e;
-    }
+    const response = await apiClient.post('/borrowing/requests', payload);
+    return response.data;
   },
 
   updateRequestStatus: async (id, status, extraData = {}) => {
-    try {
-      if (status === 'Approved' || status === 'APPROVED') {
-        const res = await apiClient.post(`/borrowing/requests/${id}/approve`);
-        return res.data;
-      } else if (status === 'Rejected' || status === 'REJECTED') {
-        const res = await apiClient.post(`/borrowing/requests/${id}/reject`, { reason: extraData.reason || 'Rejected' });
-        return res.data;
-      } else {
-        console.warn('Status update not fully supported via API:', status);
-        return { id, status };
-      }
-    } catch (e) {
-      throw e;
+    if (status === 'Approved' || status === 'APPROVED') {
+      const res = await apiClient.post(`/borrowing/requests/${id}/approve`);
+      return res.data;
+    } else if (status === 'Rejected' || status === 'REJECTED') {
+      const res = await apiClient.post(`/borrowing/requests/${id}/reject`, { reason: extraData.reason || 'Rejected' });
+      return res.data;
+    } else {
+      console.warn('Status update not fully supported via API:', status);
+      return { id, status };
     }
   },
 
   createExtensionRequest: async (originalRequestId, newDueDate, reason) => {
-    try {
-      const response = await apiClient.post(`/borrowing/requests/${originalRequestId}/extend`, {
-        new_due_date: newDueDate,
-        reason: reason
-      });
-      return response.data;
-    } catch (e) {
-      throw e;
-    }
+    const response = await apiClient.post(`/borrowing/requests/${originalRequestId}/extend`, {
+      new_due_date: newDueDate,
+      reason: reason
+    });
+    return response.data;
   },
 
   approveExtension: async (requestId) => {
-    try {
-      const response = await apiClient.post(`/borrowing/requests/${requestId}/approve-extension`);
-      return response.data;
-    } catch (e) {
-      throw e;
-    }
+    const response = await apiClient.post(`/borrowing/requests/${requestId}/approve-extension`);
+    return response.data;
   },
 
   getAllTransfers: async () => {
@@ -101,12 +93,11 @@ export const requestService = {
       const response = await apiClient.get('/transfers/');
       return response.data.map(tr => ({
         id: tr.id,
-        equipmentId: tr.equipment_model_id,
         fromLabId: tr.from_lab_id,
         toLabId: tr.to_lab_id,
         requesterId: tr.requester_id,
-        status: tr.status,
-        quantity: tr.quantity,
+        requesterName: tr.requester_name,
+        status: tr.status.charAt(0).toUpperCase() + tr.status.slice(1).toLowerCase(),
         reason: tr.reason,
         requestDate: tr.created_at,
         resolvedDate: tr.resolved_at
@@ -118,27 +109,38 @@ export const requestService = {
   },
 
   createTransfer: async (data) => {
-    try {
-      const payload = {
-        equipment_model_id: parseInt(data.equipmentId),
-        from_lab_id: parseInt(data.fromLabId),
-        to_lab_id: parseInt(data.toLabId),
-        quantity: parseInt(data.quantity) || 1,
-        reason: data.reason || null
-      };
-      const response = await apiClient.post('/transfers/', payload);
-      return response.data;
-    } catch (e) {
-      throw e;
-    }
+    const payload = {
+      from_lab_id: parseInt(data.fromLabId),
+      to_lab_id: parseInt(data.toLabId),
+      unit_asset_ids: data.unitAssetIds || [],
+      reason: data.reason || null
+    };
+    const response = await apiClient.post('/transfers/', payload);
+    return response.data;
   },
 
-  updateTransferStatus: async (id, status) => {
-    try {
-      const response = await apiClient.patch(`/transfers/${id}/status?status=${status.toUpperCase()}`);
-      return response.data;
-    } catch (e) {
-      throw e;
-    }
-  }
+  updateTransferStatus: async (id, status, decisionReason = null) => {
+    const payload = { status: status.toUpperCase() };
+    if (decisionReason) payload.decision_reason = decisionReason;
+    const response = await apiClient.patch(`/transfers/${id}/status`, payload);
+    return response.data;
+  },
+
+  createEventIssue: async (data) => {
+    const payload = {
+      event_name: data.eventName,
+      purpose: data.purpose,
+      coordinator_id: data.coordinatorId,
+      due_date: new Date(data.returnDate).toISOString(),
+      unit_asset_ids: data.unitAssetIds
+    };
+    const response = await apiClient.post('/borrowing/events/requests', payload);
+    return response.data;
+  },
+
+  getEventRequests: async () => (await apiClient.get('/borrowing/events/requests')).data,
+
+  approveEventRequest: async (id) => (await apiClient.post(`/borrowing/events/requests/${id}/approve`)).data,
+
+  rejectEventRequest: async (id, reason) => (await apiClient.post(`/borrowing/events/requests/${id}/reject`, { reason })).data,
 };

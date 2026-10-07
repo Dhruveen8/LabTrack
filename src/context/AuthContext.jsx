@@ -1,7 +1,7 @@
-import React, { createContext, useContext, useState, useEffect } from 'react';
+import React, { useState, useEffect } from 'react';
 import { authService } from '../services/authService';
 
-const AuthContext = createContext(null);
+import { AuthContext } from './contextDefinitions';
 
 // Normalize backend user data (role comes as ADMIN, ASSISTANT, etc.)
 const normalizeUser = (userData) => {
@@ -9,9 +9,12 @@ const normalizeUser = (userData) => {
   return {
     ...userData,
     role: userData.role ? userData.role.toLowerCase() : userData.role,
-    assignedLabIds: userData.assigned_labs || userData.assignedLabIds || [],
+    // FIX: /auth/me now returns assigned_lab_ids (from LabAssistantAssignment table)
+    // Map it to the frontend's assignedLabIds convention; fall back to older field names
+    assignedLabIds: userData.assigned_lab_ids || userData.assigned_labs || userData.assignedLabIds || [],
     departmentId: userData.department_id || userData.departmentId || null,
-    universityId: userData.id
+    displayId: userData.display_id,
+    universityId: userData.university_id || userData.universityId || userData.id
   };
 };
 
@@ -24,20 +27,20 @@ export const AuthProvider = ({ children }) => {
       try {
         const currentUser = await authService.getCurrentUser();
         setUser(normalizeUser(currentUser));
-      } catch (error) {
+      } catch {
         setUser(null);
       } finally {
         setLoading(false);
       }
     };
     initAuth();
-    
+
     const handleUnauthorized = () => setUser(null);
     window.addEventListener('unauthorized', handleUnauthorized);
     return () => window.removeEventListener('unauthorized', handleUnauthorized);
   }, []);
 
-  const login = async (email, password, role) => {
+  const login = async (email, password, _role) => {
     try {
       const res = await authService.login(email, password);
       if (res.success) {
@@ -55,7 +58,7 @@ export const AuthProvider = ({ children }) => {
     setUser(null);
   };
 
-  const switchDemoRole = async (role) => {
+  const switchDemoRole = async (_role) => {
     // Demo only: The backend doesn't support switching roles without relogging,
     // so this is a placeholder or we can implement auto-login with predefined demo users.
     console.warn("Role switching is mocked in UI, login directly as role instead.");
@@ -76,10 +79,4 @@ export const AuthProvider = ({ children }) => {
       {children}
     </AuthContext.Provider>
   );
-};
-
-export const useAuth = () => {
-  const context = useContext(AuthContext);
-  if (!context) throw new Error('useAuth must be used within an AuthProvider');
-  return context;
 };

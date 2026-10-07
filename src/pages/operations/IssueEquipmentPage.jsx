@@ -1,11 +1,10 @@
+import { useLabTrack, useAuth } from '../../context/hooks';
 import React, { useState, useEffect } from 'react';
 import { PageHeader } from '../../components/common/PageHeader';
 import { BarcodeScanner } from '../../components/scanner/BarcodeScanner';
-import { useLabTrack } from '../../context/LabTrackContext';
-import { useAuth } from '../../context/AuthContext';
 import apiClient from '../../api/client';
 import { useNavigate, useSearchParams } from 'react-router-dom';
-import { UserCheck, Package, CheckCircle2, QrCode, AlertCircle, ArrowRight, Clock, ShieldCheck, Zap } from 'lucide-react';
+import { UserCheck, CheckCircle2, AlertCircle, ShieldCheck, Zap } from 'lucide-react';
 
 export const IssueEquipmentPage = () => {
   const navigate = useNavigate();
@@ -14,18 +13,18 @@ export const IssueEquipmentPage = () => {
   const { equipmentList, requestsList, issueEquipmentAction, refreshData } = useLabTrack();
 
   const [step, setStep] = useState(1);
-  
+
   // Borrower details
   const [borrowerId, setBorrowerId] = useState(''); // Just the string ID for display
   const [borrowerUserId, setBorrowerUserId] = useState(null); // The actual DB integer ID
   const [borrowerApprovedRequests, setBorrowerApprovedRequests] = useState([]);
-  
+
   // Issue details
   const [selectedRequest, setSelectedRequest] = useState(null); // 'WALKIN' or { request object }
   const [scannedUnit, setScannedUnit] = useState(null);
   const [walkInModel, setWalkInModel] = useState(null); // To store equipment model details for walkin
   const [scanError, setScanError] = useState('');
-  
+
   // Form fields
   const [dueDate, setDueDate] = useState('');
 
@@ -43,7 +42,7 @@ export const IssueEquipmentPage = () => {
         setBorrowerUserId(req.requesterId);
         setBorrowerApprovedRequests([req]);
         setSelectedRequest(req);
-        setDueDate(req.requiredUntil || new Date(Date.now() + 14 * 86400000).toISOString().split('T')[0]);
+        setDueDate(req.requiredUntil?.slice(0, 10) || new Date(Date.now() + 14 * 86400000).toISOString().split('T')[0]);
         setStep(2);
       }
     }
@@ -58,12 +57,16 @@ export const IssueEquipmentPage = () => {
     try {
       const userRes = await apiClient.get(`/auth/users/lookup?q=${encodeURIComponent(cleanId)}`);
       const matchedUsers = userRes.data;
-      
+
       if (!matchedUsers || matchedUsers.length === 0) {
         setScanError(`No user found matching ID: ${cleanId}`);
         return;
       }
-      
+      if (matchedUsers.length !== 1) {
+        setScanError('This ID matches more than one account. Use the exact registered email address.');
+        return;
+      }
+
       const resolvedUserId = matchedUsers[0].id;
       setBorrowerUserId(resolvedUserId);
 
@@ -76,7 +79,7 @@ export const IssueEquipmentPage = () => {
       });
 
       setBorrowerApprovedRequests(approved);
-      
+
       // Even if 0, we go to step 2 to allow walk-in
       setStep(2);
     } catch (error) {
@@ -90,7 +93,7 @@ export const IssueEquipmentPage = () => {
     if (req === 'WALKIN') {
       setDueDate(new Date(Date.now() + 14 * 86400000).toISOString().split('T')[0]); // Default 14 days
     } else {
-      setDueDate(req.requiredUntil || new Date(Date.now() + 14 * 86400000).toISOString().split('T')[0]);
+      setDueDate(req.requiredUntil?.slice(0, 10) || new Date(Date.now() + 14 * 86400000).toISOString().split('T')[0]);
     }
     setScanError('');
   };
@@ -98,7 +101,20 @@ export const IssueEquipmentPage = () => {
   // Step 3: Handle scanning the physical equipment QR code on the item
   const handleScanEquipmentQR = async (qrCodeScanned) => {
     setScanError('');
-    const cleanQR = (qrCodeScanned || '').trim();
+    let cleanQR = (qrCodeScanned || '').trim();
+
+    // FIX: Old QR sticker labels encoded full URLs (https://labtrack.univ.edu/equipment/LT-XXX-00001)
+    // Extract the asset ID from the URL path if the scanned value looks like a URL.
+    if (cleanQR.startsWith('http')) {
+      try {
+        const url = new URL(cleanQR);
+        const pathParts = url.pathname.split('/').filter(Boolean);
+        // The asset ID is always the last segment of the path
+        cleanQR = pathParts[pathParts.length - 1] || cleanQR;
+      } catch {
+        // Not a valid URL, use as-is
+      }
+    }
 
     if (!selectedRequest) {
       setScanError('Please select a request first');
@@ -236,7 +252,7 @@ export const IssueEquipmentPage = () => {
           <BarcodeScanner
             onScan={handleScanBorrower}
             title="Scan Borrower University ID Card"
-            placeholder="e.g. 24CE001@charusat.edu.in"
+            placeholder="e.g. 24CE001"
           />
         </div>
       )}
@@ -267,7 +283,7 @@ export const IssueEquipmentPage = () => {
             <h4 style={{ fontSize: '0.95rem', fontWeight: 700, color: '#0f172a', marginBottom: '0.75rem' }}>
               1. Select Request Type:
             </h4>
-            
+
             <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
               {borrowerApprovedRequests.map(req => {
                 const isSelected = selectedRequest?.id === req.id;

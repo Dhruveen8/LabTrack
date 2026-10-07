@@ -1,10 +1,10 @@
+import { useLabTrack, useAuth } from '../../context/hooks';
+import { formatDate } from '../../utils/dateFormat';
 import React from 'react';
 import { PageHeader } from '../../components/common/PageHeader';
 import { DataTable } from '../../components/common/DataTable';
 import { StatusBadge } from '../../components/common/StatusBadge';
-import { useLabTrack } from '../../context/LabTrackContext';
-import { useAuth } from '../../context/AuthContext';
-import { ArrowRightLeft, CheckCircle, XCircle } from 'lucide-react';
+import { CheckCircle, XCircle } from 'lucide-react';
 
 export const InterLabTransfersPage = () => {
   const { user } = useAuth();
@@ -12,11 +12,11 @@ export const InterLabTransfersPage = () => {
 
   const columns = [
     { header: 'Transfer ID', accessor: 'id' },
-    { header: 'Requesting Lab', accessor: 'requestingLab' },
-    { header: 'Owning Lab', accessor: 'owningLab' },
-    { header: 'Equipment', accessor: 'equipmentName' },
-    { header: 'Requested By', accessor: 'requestedBy' },
-    { header: 'Required Dates', cell: (row) => `${row.requiredFrom} to ${row.requiredUntil}` },
+    { header: 'Source Lab', accessor: 'fromLabName' },
+    { header: 'Destination Lab', accessor: 'toLabName' },
+    { header: 'Requested By', accessor: 'requesterName' },
+    { header: 'Reason', accessor: 'reason' },
+    { header: 'Request Date', cell: (row) => formatDate(row.requestDate) },
     {
       header: 'Status',
       cell: (row) => <StatusBadge status={row.status} />
@@ -25,7 +25,7 @@ export const InterLabTransfersPage = () => {
       header: 'Actions',
       cell: (row) => (
         <div style={{ display: 'flex', gap: '0.35rem' }}>
-          {(user?.role === 'admin' || user?.role === 'assistant') && row.status === 'Pending' && (
+          {user?.role === 'admin' && row.status === 'Pending' && (
             <>
               <button className="btn btn-primary btn-sm" onClick={() => updateTransferStatusAction(row.id, 'Approved')}>
                 <CheckCircle size={14} /> Approve
@@ -34,6 +34,11 @@ export const InterLabTransfersPage = () => {
                 <XCircle size={14} /> Reject
               </button>
             </>
+          )}
+          {(user?.role === 'admin' || (user?.role === 'assistant' && user?.assignedLabIds?.includes(row.toLabId))) && row.status === 'Approved' && (
+            <button className="btn btn-success btn-sm" onClick={() => updateTransferStatusAction(row.id, 'Completed')}>
+              <CheckCircle size={14} /> Complete
+            </button>
           )}
         </div>
       )

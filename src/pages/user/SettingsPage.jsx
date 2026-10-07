@@ -1,11 +1,9 @@
+import { useLabTrack } from '../../context/hooks';
 import React, { useState, useEffect } from 'react';
 import { PageHeader } from '../../components/common/PageHeader';
-import { useLabTrack } from '../../context/LabTrackContext';
-import { useAuth } from '../../context/AuthContext';
-import { Save, Sliders, Shield, Calendar, Bell, CheckCircle2 } from 'lucide-react';
+import { Save, Calendar, Bell, CheckCircle2 } from 'lucide-react';
 
 export const SettingsPage = () => {
-  const { user } = useAuth();
   const { systemSettings, updateSystemSettingsAction } = useLabTrack();
 
   const [studentDays, setStudentDays] = useState(systemSettings?.studentBorrowLimitDays || 14);

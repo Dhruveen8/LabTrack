@@ -54,7 +54,7 @@ export const ReportsAnalyticsPage = () => {
       <PageHeader title="Reports & Institutional Analytics" subtitle="Equipment utilization metrics, monthly borrowing trends, and lab performance reports" />
 
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(400px, 1fr))', gap: '1.25rem', marginBottom: '1.5rem' }}>
-        
+
         {/* Monthly Borrowing Trends */}
         <div className="portal-card">
           <div className="portal-header">

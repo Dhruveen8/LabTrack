@@ -1,4 +1,5 @@
 import React from 'react';
+import { formatDate, isDateColumn } from '../../utils/dateFormat';
 
 export const DataTable = ({ columns, data, emptyMessage = 'No records found' }) => {
   return (
@@ -19,7 +20,7 @@ export const DataTable = ({ columns, data, emptyMessage = 'No records found' }) 
               <tr key={row.id || rowIdx}>
                 {columns.map((col, colIdx) => (
                   <td key={colIdx} style={{ textAlign: col.align || 'left' }}>
-                    {col.cell ? col.cell(row) : row[col.accessor]}
+                    {col.cell ? col.cell(row) : isDateColumn(col.accessor) ? formatDate(row[col.accessor]) : row[col.accessor]}
                   </td>
                 ))}
               </tr>

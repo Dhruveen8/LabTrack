@@ -1,9 +1,8 @@
-import React, { useState, useRef } from 'react';
+import { useLabTrack, useAuth } from '../../context/hooks';
+import React, { useState, useRef, useEffect, useMemo } from 'react';
 import { PageHeader } from '../../components/common/PageHeader';
 import { DataTable } from '../../components/common/DataTable';
 import { QRPrintSheet } from '../../components/scanner/QRPrintSheet';
-import { useLabTrack } from '../../context/LabTrackContext';
-import { useAuth } from '../../context/AuthContext';
 import { Upload, Download, Sparkles } from 'lucide-react';
 import * as XLSX from 'xlsx';
 
@@ -11,6 +10,18 @@ export const BulkImportPage = () => {
   const { user } = useAuth();
   const { labsList, bulkImportExcelEquipment } = useLabTrack();
   const fileInputRef = useRef(null);
+
+  const importLock = useRef(false);
+  const [targetLabId, setTargetLabId] = useState('');
+  const eligibleLabs = useMemo(
+    () => labsList.filter(lab => user?.role === 'admin' || user?.assignedLabIds?.includes(lab.id)),
+    [labsList, user]
+  );
+  useEffect(() => {
+    if (!eligibleLabs.some(lab => String(lab.id) === targetLabId)) {
+      setTargetLabId(eligibleLabs.length ? String(eligibleLabs[0].id) : '');
+    }
+  }, [eligibleLabs, targetLabId]);
 
   const [selectedFile, setSelectedFile] = useState(null);
   const [previewData, setPreviewData] = useState([]);
@@ -20,10 +31,11 @@ export const BulkImportPage = () => {
   const [isDragging, setIsDragging] = useState(false);
 
   const processFile = async (file) => {
-    if (!file) return;
+    if (!file || importLock.current) return;
+    setPreviewData([]);
 
     setSelectedFile(file.name);
-    
+
     try {
       const data = await file.arrayBuffer();
       const workbook = XLSX.read(data, { type: 'array' });
@@ -33,7 +45,7 @@ export const BulkImportPage = () => {
 
       const parsed = json.map(row => {
         const name = row['Equipment Model / Name'] || row.name || '';
-        const qty = parseInt(row['Quantity of Units'] || row.quantity, 10) || 1;
+        const qty = Number(row['Quantity of Units'] ?? row.quantity ?? 1);
         const category = row['Category'] || row.category || 'GEN';
         const serialPrefix = row['Manufacturer Serial No. Prefix'] || row.serialPrefix || '';
         const condition = row['Initial Physical Condition'] || row.condition || 'Excellent';
@@ -46,7 +58,7 @@ export const BulkImportPage = () => {
           serial_prefix: serialPrefix,
           condition,
           description,
-          valid: !!name && qty > 0
+          valid: !!name && Number.isInteger(qty) && qty > 0 && qty <= 10000
         };
       });
       setPreviewData(parsed);
@@ -79,13 +91,17 @@ export const BulkImportPage = () => {
   };
 
   const handleImport = async () => {
+    if (importLock.current || !targetLabId) return;
     const validItems = previewData.filter(i => i.valid);
     if (validItems.length === 0) return alert('No valid records to import');
 
+    importLock.current = true;
     setIsImporting(true);
     try {
-      // The API doesn't need labId from frontend since it uses logged in user context
-      const response = await bulkImportExcelEquipment(validItems, null);
+      const response = await bulkImportExcelEquipment(validItems, Number(targetLabId));
+      setPreviewData([]);
+      setSelectedFile(null);
+      if (fileInputRef.current) fileInputRef.current.value = '';
 
       if (response && response.units) {
         setImportedUnits(response.units);
@@ -107,13 +123,14 @@ export const BulkImportPage = () => {
       }
       alert(`Error: ${errMsg}`);
     } finally {
+      importLock.current = false;
       setIsImporting(false);
     }
   };
 
   const downloadSampleExcel = (e) => {
     e.stopPropagation();
-    
+
     const data = [
       {
         'Equipment Model / Name': 'Arduino Uno R3 Kit',
@@ -172,6 +189,15 @@ export const BulkImportPage = () => {
       />
 
       <div className="portal-card">
+        <label htmlFor="import-lab">Target laboratory</label>
+        <select id="import-lab" className="form-control" value={targetLabId}
+          disabled={isImporting} onChange={event => setTargetLabId(event.target.value)}
+          style={{ marginBottom: '1rem' }}>
+          {!eligibleLabs.length && <option value="">No assigned laboratory</option>}
+          {eligibleLabs.map(lab => <option key={lab.id} value={lab.id}>
+            {lab.displayId || `LAB-${lab.code}`} — {lab.name}
+          </option>)}
+        </select>
         <input 
           type="file" 
           accept=".xlsx, .xls" 
@@ -179,7 +205,7 @@ export const BulkImportPage = () => {
           style={{ display: 'none' }} 
           onChange={handleFileSelect} 
         />
-        
+
         <div
           onClick={() => fileInputRef.current.click()}
           onDrop={handleDrop}
@@ -222,16 +248,17 @@ export const BulkImportPage = () => {
             <DataTable columns={columns} data={previewData} />
 
             <div style={{ display: 'flex', gap: '0.75rem', marginTop: '1.25rem' }}>
-              <button 
-                className="btn btn-primary" 
+              <button
+                className="btn btn-primary"
                 onClick={handleImport}
-                disabled={isImporting || totalUnitsToCreate === 0}
+                disabled={isImporting || !targetLabId || totalUnitsToCreate === 0}
               >
                 <Sparkles size={16} /> 
                 {isImporting ? 'Importing...' : `Import & Generate ${totalUnitsToCreate} Asset QR Codes`}
               </button>
-              <button 
-                className="btn btn-secondary" 
+              <button
+                className="btn btn-secondary"
+                disabled={isImporting}
                 onClick={() => { setPreviewData([]); setSelectedFile(null); if (fileInputRef.current) fileInputRef.current.value = ''; }}
               >
                 Clear
@@ -252,4 +279,3 @@ export const BulkImportPage = () => {
     </div>
   );
 };
-

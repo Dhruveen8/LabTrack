@@ -74,19 +74,63 @@ client = httpx.Client(timeout=15)
 # ─── Step 1: Register All 5 Users ────────────────────────────────────────────
 section("SETUP — Step 1: Register Users")
 
+# Create Admin via DB script since /register forbids ADMIN
+import subprocess
+print("Creating Admin via python script...")
+script_code = """
+import asyncio
+from app.db.database import AsyncSessionLocal
+from app.db.models import User, RoleEnum, AccountStatusEnum
+from app.core.security import get_password_hash
+
+async def make_admin():
+    async with AsyncSessionLocal() as db:
+        from sqlalchemy.future import select
+        res = await db.execute(select(User).filter_by(email='admin@charusat.ac.in'))
+        if not res.scalars().first():
+            admin = User(name='Dr. Rajesh Kumar', email='admin@charusat.ac.in', hashed_password=get_password_hash('admin123'), role=RoleEnum.ADMIN, account_status=AccountStatusEnum.ACTIVE)
+            db.add(admin)
+            await db.commit()
+
+asyncio.run(make_admin())
+"""
+with open("create_admin.py", "w") as f:
+    f.write(script_code)
+subprocess.run([sys.executable, "create_admin.py"], check=True)
+
 users = [
-    ("Dr. Rajesh Kumar",  "admin@labtrack.edu",            "admin123", "ADMIN"),
-    ("Priya Sharma",      "priya.assistant@labtrack.edu",  "asst123",  "ASSISTANT"),
-    ("Amit Verma",        "amit.assistant@labtrack.edu",   "asst123",  "ASSISTANT"),
-    ("Prof. Anand Mehta", "FCE001@charusat.edu.in",    "fac123",   "FACULTY"),
-    ("Dhruveen Patel",    "24CE001@charusat.edu.in", "stu123",   "STUDENT"),
+    ("Dr. Rajesh Kumar",  "admin@charusat.ac.in",          "admin123", "ADMIN"),
+    ("Priya Sharma",      "priya@charusat.ac.in",          "asst123",  "ASSISTANT"),
+    ("Amit Verma",        "amit@charusat.ac.in",           "asst123",  "ASSISTANT"),
+    ("Prof. Anand Mehta", "fce001@charusat.ac.in",         "fac123",   "FACULTY"),
+    ("Dhruveen Patel",    "24ce001@charusat.edu.in",       "stu123",   "STUDENT"),
 ]
 
 for name, email, pw, role in users:
+    if role == "ADMIN":
+        log("1", "Admin created directly in DB", ok=True)
+        continue
     r = register(client, name, email, pw, role)
     # 200 = created, 400 = already exists (idempotent re-run)
     ok = r.status_code in (200, 400)
     log("1", f"Register {role} ({name}) → HTTP {r.status_code}", ok=ok)
+
+# Assistants and Faculty are PENDING by default. Admin must approve them!
+for name, email, pw, role in users:
+    if role in ("ASSISTANT", "FACULTY"):
+        # We need their user IDs to approve them
+        # Easiest way: Admin fetches all users and approves
+        pass
+
+def approve_users():
+    r_login = login(client, "admin@charusat.ac.in", "admin123")
+    adm_token = r_login.json()["access_token"]
+    r_users = client.get(f"{BASE}/auth/users", headers=auth(adm_token)).json()
+    for u in r_users:
+        if u["role"] in ("ASSISTANT", "FACULTY") and u["account_status"] == "PENDING":
+            client.put(f"{BASE}/auth/users/{u['id']}", json={"account_status": "ACTIVE"}, headers=auth(adm_token))
+
+approve_users()
 
 
 # ─── Login All Users ──────────────────────────────────────────────────────────
@@ -150,29 +194,29 @@ for name, code, hod in departments:
 section("SETUP — Step 3: Create 16 Labs (Admin)")
 
 labs_data = [
-    ("Chemical Process Lab",       "Block D, Room 101", "CE"),
-    ("Data Structures Lab",        "Block A, Room 201", "CSE"),
-    ("Operating Systems Lab",      "Block A, Room 202", "CSE"),
-    ("Networks Lab",               "Block A, Room 203", "CSE"),
-    ("Web Technologies Lab",       "Block B, Room 101", "IT"),
-    ("Cyber Security Lab",         "Block B, Room 102", "IT"),
-    ("AI/ML Lab",                  "Block A, Room 301", "AIML"),
-    ("Deep Learning Lab",          "Block A, Room 302", "AIML"),
-    ("Thermodynamics Lab",         "Block C, Room 101", "ME"),
-    ("CAD/CAM Lab",                "Block C, Room 102", "ME"),
-    ("IoT Lab",                    "Block E, Room 201", "EE"),
-    ("VLSI Lab",                   "Block E, Room 202", "EE"),
-    ("Power Electronics Lab",      "Block E, Room 203", "EE"),
-    ("Microprocessor Lab",         "Block F, Room 101", "EC"),
-    ("Communication Systems Lab",  "Block F, Room 102", "EC"),
-    ("Surveying & Geomatics Lab",  "Block G, Room 101", "Civil"),
+    ("Chemical Process Lab",       "CPL",  "Block D, Room 101", "CE"),
+    ("Data Structures Lab",        "DSL",  "Block A, Room 201", "CSE"),
+    ("Operating Systems Lab",      "OSL",  "Block A, Room 202", "CSE"),
+    ("Networks Lab",               "NET",  "Block A, Room 203", "CSE"),
+    ("Web Technologies Lab",       "WTL",  "Block B, Room 101", "IT"),
+    ("Cyber Security Lab",         "CSL",  "Block B, Room 102", "IT"),
+    ("AI/ML Lab",                  "AIML", "Block A, Room 301", "AIML"),
+    ("Deep Learning Lab",          "DLL",  "Block A, Room 302", "AIML"),
+    ("Thermodynamics Lab",         "THL",  "Block C, Room 101", "ME"),
+    ("CAD/CAM Lab",                "CCL",  "Block C, Room 102", "ME"),
+    ("IoT Lab",                    "IOT",  "Block E, Room 201", "EE"),
+    ("VLSI Lab",                   "VLSI", "Block E, Room 202", "EE"),
+    ("Power Electronics Lab",      "PEL",  "Block E, Room 203", "EE"),
+    ("Microprocessor Lab",         "MPL",  "Block F, Room 101", "EC"),
+    ("Communication Systems Lab",  "CSYL", "Block F, Room 102", "EC"),
+    ("Surveying & Geomatics Lab",  "SGL",  "Block G, Room 101", "Civil"),
 ]
 
 lab_ids = {}
-for name, loc, dept_code in labs_data:
+for name, code, loc, dept_code in labs_data:
     r = client.post(
         f"{BASE}/labs/",
-        json={"name": name, "location": loc, "department_id": dept_ids[dept_code]},
+        json={"name": name, "code": code, "location": loc, "department_id": dept_ids[dept_code]},
         headers=auth(admin_token),
     )
     if r.status_code == 200:
@@ -545,6 +589,69 @@ if second_request_id:
 else:
     log("18", "Skipped — no request available from Step 12", ok=False)
 
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# ─── Step 19: Inter-Lab Transfer ─────────────────────────────────────────────
+section("Step 19: Admin requests transfer of Arduino to VLSI Lab")
+
+# Make sure we use a different Arduino unit that is still AVAILABLE
+r_units = client.get(
+    f"{BASE}/inventory/units",
+    params={"model_id": arduino_model_id},
+    headers=auth(admin_token)
+).json()
+available_units = [u["asset_id"] for u in r_units if u["status"] == "AVAILABLE"]
+transfer_asset_id = available_units[0] if available_units else iot_first_asset_id
+
+# Admin requests transfer
+r = client.post(
+    f"{BASE}/transfers/",
+    json={
+        "from_lab_id": lab_ids["IoT Lab"],
+        "to_lab_id": lab_ids["VLSI Lab"],
+        "unit_asset_ids": [transfer_asset_id],
+        "reason": "Need for VLSI project"
+    },
+    headers=auth(admin_token),
+)
+expect("19", r, 200, "Admin requests transfer")
+transfer_id = r.json()["id"] if r.status_code == 200 else None
+
+if transfer_id:
+    # Admin approves
+    r_appr = client.patch(
+        f"{BASE}/transfers/{transfer_id}/status",
+        json={"status": "APPROVED", "decision_reason": "Approved"},
+        headers=auth(admin_token)
+    )
+    expect("19", r_appr, 200, "Admin approves transfer")
+    
+    # Priya completes it (she manages VLSI Lab too)
+    r_comp = client.patch(
+        f"{BASE}/transfers/{transfer_id}/status",
+        json={"status": "COMPLETED"},
+        headers=auth(priya_token)
+    )
+    expect("19", r_comp, 200, "Priya (destination lab assistant) completes transfer")
+
+
+# ─── Step 20: Event Issue ──────────────────────────────────────────────────
+section("Step 20: Assistant (Priya) issues units for Event")
+
+event_asset = available_units[1] if len(available_units) > 1 else available_units[0] if available_units else transfer_asset_id
+
+r = client.post(
+    f"{BASE}/borrowing/events/issue",
+    json={
+        "event_name": "Hackathon 2026",
+        "purpose": "Competition",
+        "coordinator_id": 4, # Prof. Anand Mehta
+        "due_date": (now + timedelta(days=3)).isoformat(),
+        "unit_asset_ids": [event_asset]
+    },
+    headers=auth(priya_token),
+)
+expect("20", r, 200, "Priya creates Event Issue for Arduino")
 
 # ═══════════════════════════════════════════════════════════════════════════════
 print("\n" + "=" * 60)

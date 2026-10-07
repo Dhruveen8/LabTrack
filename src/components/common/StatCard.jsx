@@ -1,6 +1,6 @@
 import React from 'react';
 
-export const StatCard = ({ title, value, icon: Icon, color = 'blue', subtext, trend }) => {
+export const StatCard = ({ title, value, icon: Icon, color = 'blue', subtext }) => {
   const getColorStyles = () => {
     switch (color) {
       case 'green':

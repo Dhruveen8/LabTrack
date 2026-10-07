@@ -1,6 +1,5 @@
+import { useAuth, useLabTrack } from '../../context/hooks';
 import React from 'react';
-import { useAuth } from '../../context/AuthContext';
-import { useLabTrack } from '../../context/LabTrackContext';
 import { PageHeader } from '../../components/common/PageHeader';
 import { StatCard } from '../../components/common/StatCard';
 import { DataTable } from '../../components/common/DataTable';
@@ -10,10 +9,23 @@ import { Search, Send, CalendarCheck, BookOpen, Clock, AlertCircle, CheckSquare,
 
 export const FacultyDashboard = () => {
   const { user } = useAuth();
-  const { transactionsList, requestsList, notificationsList } = useLabTrack();
+  const { transactionsList, requestsList } = useLabTrack();
 
-  const myBorrowings = transactionsList.filter(t => t.borrowerId === user?.universityId || t.borrowerName.includes('Vance') || t.status === 'Issued');
-  const myRequests = requestsList.filter(r => r.requesterId === user?.universityId || r.requesterRole === 'Faculty');
+  // FIX: Filter strictly by current user's numeric ID, not by hardcoded names or role
+  const myAllBorrowings = transactionsList.filter(t => t.borrowerId === user?.id);
+  // FIX: "Active Borrowings" = ACTIVE status only, not all transactions including returned
+  const myActiveBorrowings = myAllBorrowings.filter(
+    t => t.status === 'Active' || t.status === 'ACTIVE'
+  );
+  const myRequests = requestsList.filter(r => r.requesterId === user?.id);
+  const pendingRequests = myRequests.filter(r => r.status === 'Pending' || r.status === 'PENDING');
+
+  // Due soon = active borrowings whose due date is within 5 days for faculty
+  const dueSoonCount = myActiveBorrowings.filter(t => {
+    const due = new Date(t.dueDate);
+    const diffMs = due - Date.now();
+    return diffMs > 0 && diffMs < 5 * 24 * 60 * 60 * 1000;
+  }).length;
 
   const columns = [
     { header: 'TXN ID', accessor: 'id' },
@@ -57,19 +69,21 @@ export const FacultyDashboard = () => {
 
       {/* Faculty KPI Stats */}
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: '1rem', marginBottom: '1.5rem' }}>
-        <StatCard title="Active Borrowings" value={myBorrowings.length} icon={BookOpen} color="blue" />
-        <StatCard title="Pending Requests" value={myRequests.filter(r => r.status === 'Pending').length} icon={Clock} color="amber" />
-        <StatCard title="Due Soon" value="1" icon={AlertCircle} color="danger" />
-        <StatCard title="Total Lifetime Borrowings" value={myBorrowings.length + 8} icon={CheckSquare} color="green" />
+        <StatCard title="Active Borrowings" value={myActiveBorrowings.length} icon={BookOpen} color="blue" />
+        <StatCard title="Pending Requests" value={pendingRequests.length} icon={Clock} color="amber" />
+        {/* FIX: Real due-soon count, not hardcoded "1" */}
+        <StatCard title="Due Soon" value={dueSoonCount} icon={AlertCircle} color="danger" />
+        {/* FIX: Total lifetime borrowings without fabricated +8 offset */}
+        <StatCard title="Total Lifetime Borrowings" value={myAllBorrowings.length} icon={CheckSquare} color="green" />
       </div>
 
-      {/* Current Borrowings Table */}
+      {/* Active Borrowings Table — ACTIVE only */}
       <div className="portal-card">
         <div className="portal-header">
           <div className="portal-title">My Active Equipment Borrowings</div>
           <div className="portal-subtitle">Currently assigned equipment to your faculty account</div>
         </div>
-        <DataTable columns={columns} data={myBorrowings} emptyMessage="No active equipment borrowings" />
+        <DataTable columns={columns} data={myActiveBorrowings} emptyMessage="No active equipment borrowings" />
       </div>
     </div>
   );

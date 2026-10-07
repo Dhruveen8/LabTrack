@@ -1,12 +1,11 @@
+import { useLabTrack, useAuth } from '../../context/hooks';
 import React from 'react';
-import { useLabTrack } from '../../context/LabTrackContext';
-import { useAuth } from '../../context/AuthContext';
 import { PageHeader } from '../../components/common/PageHeader';
 import { StatCard } from '../../components/common/StatCard';
 import { DataTable } from '../../components/common/DataTable';
 import { StatusBadge } from '../../components/common/StatusBadge';
 import { Link } from 'react-router-dom';
-import { QrCode, History, Plus, Upload, CheckCircle, Clock, AlertTriangle, FileText, Building2, Send } from 'lucide-react';
+import { QrCode, History, Plus, Upload, CheckCircle, Clock, AlertTriangle, FileText, Building2 } from 'lucide-react';
 
 export const AssistantDashboard = () => {
   const { user } = useAuth();
@@ -79,7 +78,7 @@ export const AssistantDashboard = () => {
                   className="badge badge-info"
                   style={{ fontSize: '0.8rem', padding: '4px 10px', display: 'inline-flex', alignItems: 'center', gap: '5px' }}
                 >
-                  <Building2 size={13} /> {lab.name} ({lab.id})
+                  <Building2 size={13} /> {lab.name} ({lab.displayId})
                 </span>
               ))}
             </div>
@@ -104,6 +103,9 @@ export const AssistantDashboard = () => {
           </Link>
           <Link to="/requests" className="btn btn-secondary">
             <FileText size={16} /> Review Requests ({pendingRequests} Pending)
+          </Link>
+          <Link to="/event-issue" className="btn btn-secondary">
+            <FileText size={16} /> Review Event / Club Requests
           </Link>
           <Link to="/equipment/add" className="btn btn-secondary">
             <Plus size={16} /> Add Equipment

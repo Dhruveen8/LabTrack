@@ -20,7 +20,7 @@ export const equipmentService = {
         const availableCount = modelUnits.filter(u => u.status === 'AVAILABLE').length;
         const borrowedCount = modelUnits.filter(u => u.status === 'ISSUED').length;
         const lab = labs.find(l => l.id === model.lab_id) || {};
-        
+
         return {
           id: model.id, // Ensure it's string if needed, but int works
           name: model.name,
@@ -76,7 +76,7 @@ export const equipmentService = {
 
   create: async (data) => {
     const qty = parseInt(data.quantity, 10) || 1;
-    
+
     // 1. Create model
     const modelPayload = {
       name: data.name,
@@ -84,14 +84,9 @@ export const equipmentService = {
       description: data.description || '',
       lab_id: parseInt(data.labId)
     };
-    
-    let createdModel;
-    try {
-      const modelRes = await apiClient.post('/inventory/models', modelPayload);
-      createdModel = modelRes.data;
-    } catch (e) {
-      throw e;
-    }
+
+    const modelRes = await apiClient.post('/inventory/models', modelPayload);
+    const createdModel = modelRes.data;
 
     // 2. Create units
     for (let i = 0; i < qty; i++) {
@@ -116,41 +111,25 @@ export const equipmentService = {
   },
 
   bulkImportExcel: async (payload) => {
-    try {
-      const response = await apiClient.post('/inventory/import_excel', payload);
-      return response.data;
-    } catch (e) {
-      throw e;
-    }
+    const response = await apiClient.post('/inventory/import_excel', payload);
+    return response.data;
   },
 
   update: async (id, updatedData) => {
-    try {
-      const response = await apiClient.put(`/inventory/models/${id}`, updatedData);
-      return response.data;
-    } catch (e) {
-      throw e;
-    }
+    const response = await apiClient.put(`/inventory/models/${id}`, updatedData);
+    return response.data;
   },
 
   delete: async (id) => {
-    try {
-      const response = await apiClient.delete(`/inventory/models/${id}`);
-      return response.data;
-    } catch (e) {
-      throw e;
-    }
+    const response = await apiClient.delete(`/inventory/models/${id}`);
+    return response.data;
   },
 
   updateUnitStatus: async (assetId, newStatus, condition = null) => {
-    try {
-      const payload = {};
-      if (newStatus) payload.status = newStatus.toUpperCase();
-      if (condition) payload.condition = condition;
-      const response = await apiClient.patch(`/inventory/units/${assetId}/status`, payload);
-      return response.data;
-    } catch (e) {
-      throw e;
-    }
+    const payload = {};
+    if (newStatus) payload.status = newStatus.toUpperCase();
+    if (condition) payload.condition = condition;
+    const response = await apiClient.patch(`/inventory/units/${assetId}/status`, payload);
+    return response.data;
   }
 };

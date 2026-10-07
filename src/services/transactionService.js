@@ -16,6 +16,11 @@ export const transactionService = {
           requestId: txn.request_id,
           unitAssetId: txn.unit_asset_id,
           borrowerId: txn.borrower_id,
+          borrowerName: txn.borrower_name,
+          borrowerType: txn.borrower_role?.toLowerCase(),
+          isQuickBorrow: txn.is_quick_borrow,
+          returnCondition: txn.return_condition,
+          returnRemarks: txn.return_remarks,
           labId: txn.lab_id,
           issueDate: txn.issue_date,
           dueDate: txn.due_date,
@@ -49,27 +54,19 @@ export const transactionService = {
   },
 
   issueEquipment: async (issueData) => {
-    try {
-      const response = await apiClient.post('/borrowing/checkout', {
-        request_id: issueData.requestId,
-        asset_id: issueData.unitAssetId
-      });
-      return response.data;
-    } catch (e) {
-      throw e;
-    }
+    const response = await apiClient.post('/borrowing/checkout', {
+      request_id: issueData.requestId,
+      asset_id: issueData.unitAssetId
+    });
+    return response.data;
   },
 
   returnEquipment: async (transactionId, assetId, returnCondition, remarks) => {
-    
-    try {
-      const response = await apiClient.post('/borrowing/return', {
-        asset_id: assetId,
-        condition_remarks: returnCondition ? `${returnCondition}${remarks ? ' - ' + remarks : ''}` : (remarks || null)
-      });
-      return response.data;
-    } catch (e) {
-      throw e;
-    }
+
+    const response = await apiClient.post('/borrowing/return', {
+      asset_id: assetId,
+      condition_remarks: returnCondition ? `${returnCondition}${remarks ? ' - ' + remarks : ''}` : (remarks || null)
+    });
+    return response.data;
   },
 };

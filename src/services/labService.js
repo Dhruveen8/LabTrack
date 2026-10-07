@@ -1,12 +1,23 @@
 import apiClient from '../api/client';
 
+const mapLab = lab => ({ ...lab, displayId: lab.display_id || `LAB-${lab.code}` });
+
 export const labService = {
   getAll: async () => {
     try {
       const response = await apiClient.get('/labs/');
-      return response.data;
+      return response.data.map(mapLab);
     } catch (e) {
       console.error('Error fetching labs', e);
+      return [];
+    }
+  },
+
+  getAssignments: async () => {
+    try {
+      const response = await apiClient.get('/labs/assignments');
+      return response.data;
+    } catch {
       return [];
     }
   },
@@ -15,7 +26,7 @@ export const labService = {
     try {
       const labs = await labService.getAll();
       return labs.find(lab => lab.id === parseInt(id) || lab.id === id) || null;
-    } catch (e) {
+    } catch {
       return null;
     }
   },
@@ -24,16 +35,17 @@ export const labService = {
     try {
       const labs = await labService.getAll();
       return labs.filter(lab => lab.department_id === parseInt(deptId) || lab.department_id === deptId);
-    } catch (e) {
+    } catch {
       return [];
     }
   },
 
   getByAssistant: async (userId) => {
     try {
-      const labs = await labService.getAll();
-      return labs.filter(lab => lab.incharge_user_id === parseInt(userId) || lab.incharge_user_id === userId);
-    } catch (e) {
+      const [labs, assignments] = await Promise.all([labService.getAll(), labService.getAssignments()]);
+      const myLabIds = assignments.filter(a => a.assistant_id === parseInt(userId) || a.assistant_id === userId).map(a => a.lab_id);
+      return labs.filter(lab => myLabIds.includes(lab.id));
+    } catch {
       return [];
     }
   },
@@ -43,44 +55,27 @@ export const labService = {
       name: data.name,
       code: data.code,
       department_id: data.departmentId || data.department_id,
-      incharge_user_id: data.inchargeUserId || data.incharge_user_id || null,
-      total_capacity: data.totalCapacity || 30
+      location: data.location || null
     };
-    try {
-      const response = await apiClient.post('/labs/', payload);
-      return response.data;
-    } catch (e) {
-      throw e;
-    }
+    const response = await apiClient.post('/labs/', payload);
+    return mapLab(response.data);
   },
 
   update: async (id, data) => {
-    try {
-      const response = await apiClient.put(`/labs/${id}`, data);
-      return response.data;
-    } catch (e) {
-      throw e;
-    }
+    const response = await apiClient.put(`/labs/${id}`, data);
+    return mapLab(response.data);
   },
 
   delete: async (id) => {
-    try {
-      const response = await apiClient.delete(`/labs/${id}`);
-      return response.data;
-    } catch (e) {
-      throw e;
-    }
+    const response = await apiClient.delete(`/labs/${id}`);
+    return response.data;
   },
 
-  assignAssistant: async (labId, assistantUserId, assistantName) => {
-    try {
-      await apiClient.post(`/labs/${labId}/assign_assistant?assistant_id=${assistantUserId}`);
-      // Return updated lab
-      const labs = await labService.getAll();
-      return labs.find(lab => lab.id === parseInt(labId) || lab.id === labId);
-    } catch (e) {
-      throw e;
-    }
+  assignAssistant: async (labId, assistantUserId, _assistantName) => {
+    await apiClient.post(`/labs/${labId}/assign_assistant?assistant_id=${assistantUserId}`);
+    // Return updated lab
+    const labs = await labService.getAll();
+    return labs.find(lab => lab.id === parseInt(labId) || lab.id === labId);
   },
 
   // --- FE-5: Use real stats from backend ---
@@ -89,9 +84,8 @@ export const labService = {
       const response = await apiClient.get('/inventory/stats');
       const labs = await labService.getAll();
       return { ...response.data, totalLabs: labs.length };
-    } catch (e) {
+    } catch {
       return { totalEquipment: 0, available: 0, borrowed: 0, maintenance: 0, totalLabs: 0 };
     }
   }
 };
-

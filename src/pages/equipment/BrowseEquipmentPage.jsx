@@ -1,9 +1,9 @@
 import React from 'react';
 import { PageHeader } from '../../components/common/PageHeader';
-import { useLabTrack } from '../../context/LabTrackContext';
+import { useLabTrack } from '../../context/hooks';
 import { StatusBadge } from '../../components/common/StatusBadge';
 import { Link } from 'react-router-dom';
-import { Package, Send, Eye } from 'lucide-react';
+import { Send, Eye } from 'lucide-react';
 
 export const BrowseEquipmentPage = () => {
   const { equipmentList } = useLabTrack();

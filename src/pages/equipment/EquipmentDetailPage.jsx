@@ -1,16 +1,15 @@
+import { useLabTrack, useAuth } from '../../context/hooks';
 import React, { useState } from 'react';
 import { useParams, Link } from 'react-router-dom';
-import { useLabTrack } from '../../context/LabTrackContext';
 import { PageHeader } from '../../components/common/PageHeader';
 import { StatusBadge } from '../../components/common/StatusBadge';
 import { QRCodeDisplay } from '../../components/scanner/QRCodeDisplay';
 import { QRPrintSheet } from '../../components/scanner/QRPrintSheet';
-import { useAuth } from '../../context/AuthContext';
-import { ArrowLeft, Package, Building2, Calendar, Tag, Printer, QrCode } from 'lucide-react';
+import { ArrowLeft, Printer } from 'lucide-react';
 
 export const EquipmentDetailPage = () => {
   const { id } = useParams();
-  const { equipmentList } = useLabTrack();
+  const { equipmentList, loading } = useLabTrack();
   const { user } = useAuth();
   // --- NR-1: Only admin/assistant can print QR ---
   const canPrintQR = user?.role === 'admin' || user?.role === 'assistant';
@@ -35,12 +34,29 @@ export const EquipmentDetailPage = () => {
     }
   }
 
-  if (!item && equipmentList.length > 0) {
-    item = equipmentList[0];
+  // FIX: Don't silently show a random item — show a proper not-found message
+  // Also handle the loading state (equipmentList is empty while fetching)
+
+  if (loading) {
+    return (
+      <div className="portal-card" style={{ textAlign: 'center', padding: '3rem' }}>
+        <p style={{ color: '#64748b' }}>Loading equipment data...</p>
+      </div>
+    );
+  }
+
+  if (!item) {
+    return (
+      <div className="portal-card" style={{ textAlign: 'center', padding: '3rem' }}>
+        <h3 style={{ color: '#dc2626', marginBottom: '0.5rem' }}>Equipment Not Found</h3>
+        <p style={{ color: '#64748b', marginBottom: '1.5rem' }}>No equipment record matches the ID: <code>{id}</code></p>
+        <Link to="/equipment" className="btn btn-secondary">← Back to Equipment List</Link>
+      </div>
+    );
   }
 
   const units = item?.units || [];
-  const primaryAssetId = highlightedUnit?.assetId || units[0]?.assetId || item.id;
+  const primaryAssetId = highlightedUnit?.assetId || units[0]?.assetId || item?.id;
 
   const handlePrintAllQR = () => {
     setPrintUnits(units);

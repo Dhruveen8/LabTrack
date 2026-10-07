@@ -1,8 +1,8 @@
+import { useLabTrack, useAuth } from '../../context/hooks';
+import { formatDate } from '../../utils/dateFormat';
 import React, { useState } from 'react';
 import { PageHeader } from '../../components/common/PageHeader';
-import { useLabTrack } from '../../context/LabTrackContext';
-import { useAuth } from '../../context/AuthContext';
-import { Bell, CheckCheck, AlertTriangle, Info, CheckCircle, PackagePlus, CalendarCheck, ArrowRightLeft } from 'lucide-react';
+import { CheckCheck } from 'lucide-react';
 
 export const NotificationsPage = () => {
   const { user } = useAuth();
@@ -106,7 +106,7 @@ export const NotificationsPage = () => {
                     {getCategoryBadge(n.category)}
                   </div>
                   <div style={{ fontSize: '0.85rem', color: '#475569' }}>{n.message}</div>
-                  <div style={{ fontSize: '0.75rem', color: '#94a3b8', marginTop: '6px' }}>{n.timestamp}</div>
+                  <div style={{ fontSize: '0.75rem', color: '#94a3b8', marginTop: '6px' }}>{formatDate(n.created_at || n.timestamp)}</div>
                 </div>
               </div>
             ))}

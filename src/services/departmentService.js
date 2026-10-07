@@ -15,7 +15,7 @@ export const departmentService = {
     try {
       const response = await apiClient.get(`/departments/${id}`);
       return response.data;
-    } catch (e) {
+    } catch {
       return null;
     }
   },
@@ -26,11 +26,7 @@ export const departmentService = {
       code: data.code,
       hod_name: data.hodName || data.hod_name || "TBD"
     };
-    try {
-      const response = await apiClient.post('/departments/', payload);
-      return response.data;
-    } catch (e) {
-      throw e;
-    }
+    const response = await apiClient.post('/departments/', payload);
+    return response.data;
   }
 };

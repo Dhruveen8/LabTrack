@@ -19,7 +19,7 @@ async def create_department(
     result = await db.execute(select(Department).where(Department.code == dept_in.code))
     if result.scalars().first():
         raise HTTPException(status_code=400, detail="Department with this code already exists")
-    
+
     dept = Department(**dept_in.model_dump())
     db.add(dept)
     await db.commit()
@@ -59,11 +59,11 @@ async def update_department(
     dept = result.scalars().first()
     if not dept:
         raise HTTPException(status_code=404, detail="Department not found")
-    
+
     update_data = dept_in.model_dump()
     for field, value in update_data.items():
         setattr(dept, field, value)
-    
+
     await db.commit()
     await db.refresh(dept)
     return dept
@@ -78,7 +78,7 @@ async def delete_department(
     dept = result.scalars().first()
     if not dept:
         raise HTTPException(status_code=404, detail="Department not found")
-    
+
     await db.delete(dept)
     await db.commit()
     return {"message": "Department deleted successfully"}

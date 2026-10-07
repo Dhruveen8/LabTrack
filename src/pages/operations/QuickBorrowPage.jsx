@@ -1,11 +1,10 @@
+import { formatDate } from '../../utils/dateFormat';
 import React, { useState, useEffect } from 'react';
 import { PageHeader } from '../../components/common/PageHeader';
-import { useAuth } from '../../context/AuthContext';
 import { Zap, QrCode, UserCheck, ArrowLeftRight, Clock, AlertTriangle, CheckCircle } from 'lucide-react';
 import apiClient from '../../api/client';
 
 export const QuickBorrowPage = () => {
-  const { user } = useAuth();
   const [studentId, setStudentId] = useState('');
   const [assetId, setAssetId] = useState('');
   const [step, setStep] = useState(1); // 1 = scan student, 2 = scan equipment
@@ -47,9 +46,13 @@ export const QuickBorrowPage = () => {
     e.preventDefault();
     setMessage(null);
     try {
+      const lookup = await apiClient.get('/auth/users/lookup', { params: { q: studentId.trim() } });
+      if (lookup.data.length !== 1 || lookup.data[0].role !== 'FACULTY') {
+        throw new Error('Enter an exact registered faculty ID or email address.');
+      }
       await apiClient.post('/borrowing/quick-borrow', {
         asset_id: assetId.trim(),
-        borrower_id: parseInt(studentId.trim())
+        borrower_id: lookup.data[0].id
       });
       setMessage({ type: 'success', text: `✅ Item ${assetId} issued to faculty #${studentId}` });
       setStudentId('');
@@ -58,7 +61,7 @@ export const QuickBorrowPage = () => {
       fetchActiveItems();
       fetchStats();
     } catch (err) {
-      setMessage({ type: 'error', text: `❌ ${err.response?.data?.detail || 'Quick-borrow failed'}` });
+      setMessage({ type: 'error', text: `❌ ${err.response?.data?.detail || err.message || 'Quick-borrow failed'}` });
     }
   };
 
@@ -235,8 +238,8 @@ export const QuickBorrowPage = () => {
                 <tr>
                   <th>Asset ID</th>
                   <th>Borrower ID</th>
-                  <th>Issued At</th>
-                  <th>Due By</th>
+                  <th>Issue Date</th>
+                  <th>Due Date</th>
                   <th>Status</th>
                 </tr>
               </thead>
@@ -247,8 +250,8 @@ export const QuickBorrowPage = () => {
                     <tr key={item.id} style={{ backgroundColor: isOverdue ? '#fef2f2' : 'transparent' }}>
                       <td style={{ fontFamily: 'monospace', fontWeight: 700, color: '#1e40af' }}>{item.unit_asset_id}</td>
                       <td>{item.borrower_id}</td>
-                      <td>{new Date(item.issue_date).toLocaleTimeString()}</td>
-                      <td>{new Date(item.due_date).toLocaleTimeString()}</td>
+                      <td>{formatDate(item.issue_date)}</td>
+                      <td>{formatDate(item.due_date)}</td>
                       <td>
                         <span className={`badge ${isOverdue ? 'badge-danger' : 'badge-warning'}`}>
                           {isOverdue ? '⚠️ Overdue' : 'Out'}

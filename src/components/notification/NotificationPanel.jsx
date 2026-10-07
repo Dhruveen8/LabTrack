@@ -1,6 +1,6 @@
+import { useLabTrack, useAuth } from '../../context/hooks';
+import { formatDate } from '../../utils/dateFormat';
 import React from 'react';
-import { useLabTrack } from '../../context/LabTrackContext';
-import { useAuth } from '../../context/AuthContext';
 import { Bell, CheckCheck, Info, AlertTriangle, CheckCircle, PackagePlus, CalendarCheck, ArrowRightLeft } from 'lucide-react';
 import { Link } from 'react-router-dom';
 
@@ -96,7 +96,7 @@ export const NotificationPanel = ({ onClose }) => {
                 <div style={{ flex: 1 }}>
                   <div style={{ fontSize: '0.8rem', fontWeight: 600, color: '#0f172a' }}>{n.title}</div>
                   <div style={{ fontSize: '0.75rem', color: '#475569', marginTop: '2px' }}>{n.message}</div>
-                  <div style={{ fontSize: '0.7rem', color: '#94a3b8', marginTop: '4px' }}>{n.timestamp}</div>
+                  <div style={{ fontSize: '0.7rem', color: '#94a3b8', marginTop: '4px' }}>{formatDate(n.created_at || n.timestamp)}</div>
                 </div>
               </div>
             </div>

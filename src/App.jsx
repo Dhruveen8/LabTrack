@@ -1,12 +1,14 @@
 import React from 'react';
 import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
-import { AuthProvider, useAuth } from './context/AuthContext';
+import { AuthProvider } from './context/AuthContext';
+import { useAuth } from './context/hooks';
 import { ToastProvider } from './context/ToastContext';
 import { LabTrackProvider } from './context/LabTrackContext';
 import { MainLayout } from './layouts/MainLayout';
 
 // Pages
 import { LoginPage } from './pages/auth/LoginPage';
+import { RegisterPage } from './pages/auth/RegisterPage';
 import { AdminDashboard } from './pages/dashboards/AdminDashboard';
 import { AssistantDashboard } from './pages/dashboards/AssistantDashboard';
 import { FacultyDashboard } from './pages/dashboards/FacultyDashboard';
@@ -82,6 +84,7 @@ export function App() {
             <Routes>
               {/* Public Auth Route */}
               <Route path="/login" element={<LoginPage />} />
+              <Route path="/register" element={<RegisterPage />} />
 
               {/* Root Redirect */}
               <Route path="/" element={<RootRedirect />} />

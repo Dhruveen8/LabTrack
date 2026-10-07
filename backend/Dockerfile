@@ -13,7 +13,7 @@ RUN pip install --no-cache-dir -r requirements.txt
 COPY . .
 
 # Make entrypoint executable
-RUN chmod +x entrypoint.sh
+RUN sed -i 's/\r$//' entrypoint.sh && chmod +x entrypoint.sh
 
-# Default command — use entrypoint for migrations + seed + serve
+# Default command — migrations + optional admin bootstrap + serve
 CMD ["/app/entrypoint.sh"]

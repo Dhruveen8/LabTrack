@@ -42,7 +42,7 @@ async def update_settings(
             existing.value = value
         else:
             db.add(SystemSetting(key=key, value=value))
-    
+
     await db.commit()
     return {"message": "Settings updated successfully"}
 

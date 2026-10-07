@@ -1,11 +1,11 @@
+import { useLabTrack, useAuth } from '../../context/hooks';
+import { formatDate } from '../../utils/dateFormat';
 import React, { useState } from 'react';
 import { PageHeader } from '../../components/common/PageHeader';
 import { DataTable } from '../../components/common/DataTable';
 import { StatusBadge } from '../../components/common/StatusBadge';
-import { useLabTrack } from '../../context/LabTrackContext';
-import { useAuth } from '../../context/AuthContext';
 import { Link, useNavigate } from 'react-router-dom';
-import { Send, CheckCircle, XCircle, RefreshCw, QrCode, Clock, Sparkles } from 'lucide-react';
+import { Send, CheckCircle, XCircle, RefreshCw, QrCode, Sparkles } from 'lucide-react';
 
 export const RequestsListPage = () => {
   const { user } = useAuth();
@@ -78,11 +78,11 @@ export const RequestsListPage = () => {
       cell: (row) => (
         <div>
           <div style={{ fontSize: '0.85rem', color: '#334155' }}>
-            {row.requiredFrom} ➔ <strong>{row.requiredUntil}</strong>
+            {formatDate(row.requiredFrom)} ➔ <strong>{formatDate(row.requiredUntil)}</strong>
           </div>
           {row.status === 'Extension_Pending' && (
             <div style={{ fontSize: '0.75rem', color: '#15803d', fontWeight: 600 }}>
-              Extension Requested to: {row.requestedNewDueDate}
+              Extension Requested to: {formatDate(row.requestedNewDueDate)}
             </div>
           )}
         </div>

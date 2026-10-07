@@ -11,7 +11,7 @@ export const notificationService = {
     }
   },
 
-  getForRole: async (role = 'student') => {
+  getForRole: async (_role = 'student') => {
     // The backend now filters by current_user.id, so we just get all for this user
     return await notificationService.getAll();
   },
@@ -40,12 +40,12 @@ export const notificationService = {
     try {
       const response = await apiClient.get('/notifications/unread-count');
       return response.data.unreadCount;
-    } catch (e) {
+    } catch {
       return 0;
     }
   },
 
-  addNotification: async (data) => {
+  addNotification: async (_data) => {
     console.warn('Frontend should not manually add notifications anymore. Backend handles it.');
     return null;
   }

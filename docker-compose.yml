@@ -32,7 +32,7 @@ services:
     depends_on:
       db:
         condition: service_healthy
-    # entrypoint.sh handles: wait for DB → alembic migrate → seed if empty → uvicorn
+    # entrypoint.sh handles: wait for DB → migrations → optional admin bootstrap → uvicorn
 
   frontend:
     build:

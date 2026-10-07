@@ -1,8 +1,11 @@
 import apiClient from '../api/client';
+import { resolveInstitutionalId } from '../utils/userIds';
 
 const mapUser = (user) => ({
   ...user,
-  assignedLabIds: user.assigned_labs || user.assignedLabIds || [],
+  displayId: user.display_id,
+  universityId: user.university_id,
+  accountStatus: user.account_status || 'PENDING',
   departmentId: user.department_id || user.departmentId || null,
   role: user.role ? user.role.toLowerCase() : 'student'
 });
@@ -28,7 +31,7 @@ export const userService = {
     return all.filter(u => u.role === 'ASSISTANT' || u.role === 'assistant');
   },
 
-  assignLabsToAssistant: async (userId, labIds = []) => {
+  assignLabsToAssistant: async (userId, _labIds = []) => {
     console.warn('assignLabsToAssistant not directly supported. Use labService.assignAssistant instead');
     return await userService.getById(userId);
   },
@@ -38,54 +41,31 @@ export const userService = {
       email: data.email,
       password: data.password || 'default123',
       name: data.name,
+      university_id: resolveInstitutionalId((data.role || 'student').toLowerCase(), data.universityId, data.email),
       role: (data.role || 'STUDENT').toUpperCase(),
-      department_id: data.departmentId ? parseInt(data.departmentId) : null,
-      assigned_labs: data.assignedLabIds || []
+      department_id: data.departmentId ? parseInt(data.departmentId) : null
     };
-    try {
-      const response = await apiClient.post('/auth/register', payload);
-      return mapUser(response.data);
-    } catch (e) {
-      throw e;
-    }
+    const response = await apiClient.post('/auth/register', payload);
+    return mapUser(response.data);
   },
 
   updateRole: async (id, newRole) => {
-    try {
-      const response = await apiClient.put(`/auth/users/${id}`, { role: newRole.toUpperCase() });
-      return mapUser(response.data);
-    } catch (e) {
-      throw e;
-    }
+    const response = await apiClient.put(`/auth/users/${id}`, { role: newRole.toUpperCase() });
+    return mapUser(response.data);
   },
 
   updateStatus: async (id, newStatus) => {
-    if (newStatus === 'inactive' || newStatus === 'deleted') {
-      try {
-        const response = await apiClient.delete(`/auth/users/${id}`);
-        return mapUser(response.data);
-      } catch (e) {
-        throw e;
-      }
-    }
-    return { id, status: newStatus };
+    const response = await apiClient.put(`/auth/users/${id}`, { account_status: newStatus.toUpperCase() });
+    return mapUser(response.data);
   },
 
   update: async (id, data) => {
-    try {
-      const response = await apiClient.put(`/auth/users/${id}`, data);
-      return mapUser(response.data);
-    } catch (e) {
-      throw e;
-    }
+    const response = await apiClient.put(`/auth/users/${id}`, data);
+    return mapUser(response.data);
   },
 
   delete: async (id) => {
-    try {
-      const response = await apiClient.delete(`/auth/users/${id}`);
-      return mapUser(response.data);
-    } catch (e) {
-      throw e;
-    }
+    const response = await apiClient.delete(`/auth/users/${id}`);
+    return mapUser(response.data);
   }
 };

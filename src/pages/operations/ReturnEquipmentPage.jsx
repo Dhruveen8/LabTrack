@@ -1,26 +1,36 @@
+import { formatDate } from '../../utils/dateFormat';
+import apiClient from '../../api/client';
 import React, { useState } from 'react';
 import { PageHeader } from '../../components/common/PageHeader';
 import { BarcodeScanner } from '../../components/scanner/BarcodeScanner';
-import { useLabTrack } from '../../context/LabTrackContext';
+import { useLabTrack } from '../../context/hooks';
 import { useNavigate } from 'react-router-dom';
-import { CheckCircle2, History, AlertCircle, PackageCheck, UserCheck } from 'lucide-react';
+import { CheckCircle2, AlertCircle, PackageCheck } from 'lucide-react';
 
 export const ReturnEquipmentPage = () => {
   const navigate = useNavigate();
-  const { transactionsList, returnEquipmentAction, equipmentList } = useLabTrack();
+  const { transactionsList, returnEquipmentAction } = useLabTrack();
 
   const [selectedTxn, setSelectedTxn] = useState(null);
-  const [matchedUnit, setMatchedUnit] = useState(null);
   const [condition, setCondition] = useState('Excellent');
   const [remarks, setRemarks] = useState('Returned in verified condition');
   const [scanError, setScanError] = useState('');
 
   const handleScan = async (code) => {
     setScanError('');
-    const cleanCode = (code || '').trim();
+    // FIX: Strip URL prefix from scanned QR codes — old labels encoded full URLs
+    let cleanCode = (code || '').trim();
+    if (cleanCode.startsWith('http')) {
+      try {
+        const url = new URL(cleanCode);
+        const pathParts = url.pathname.split('/').filter(Boolean);
+        cleanCode = pathParts[pathParts.length - 1] || cleanCode;
+      } catch {
+        // Not a valid URL, use as-is
+      }
+    }
 
     try {
-      const { default: apiClient } = await import('../../api/client');
       // Validate unit exists in backend
       const unitRes = await apiClient.get(`/inventory/units/${cleanCode}`);
       const apiUnit = unitRes.data;
@@ -42,13 +52,7 @@ export const ReturnEquipmentPage = () => {
       }
 
       setSelectedTxn(txn);
-      
-      // Merge backend unit data with UI shape
-      setMatchedUnit({
-        assetId: apiUnit.asset_id,
-        condition: apiUnit.condition,
-        serialNumber: apiUnit.serial_number
-      });
+
     } catch (error) {
       if (error.response?.status === 404) {
         setScanError(`Asset tag "${cleanCode}" not found in inventory.`);
@@ -126,9 +130,9 @@ export const ReturnEquipmentPage = () => {
 
             <div>
               <div style={{ fontSize: '0.75rem', color: '#64748b', fontWeight: 600 }}>DATES</div>
-              <div style={{ fontSize: '0.85rem', color: '#334155' }}>Issued: <strong>{selectedTxn.issueDate}</strong></div>
+              <div style={{ fontSize: '0.85rem', color: '#334155' }}>Issued: <strong>{formatDate(selectedTxn.issueDate)}</strong></div>
               <div style={{ fontSize: '0.85rem', color: selectedTxn.status === 'Overdue' ? '#dc2626' : '#334155' }}>
-                Due: <strong>{selectedTxn.dueDate}</strong> {selectedTxn.status === 'Overdue' ? '(Overdue)' : ''}
+                Due: <strong>{formatDate(selectedTxn.dueDate)}</strong> {selectedTxn.status === 'Overdue' ? '(Overdue)' : ''}
               </div>
             </div>
           </div>

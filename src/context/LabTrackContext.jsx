@@ -1,5 +1,5 @@
-import React, { createContext, useContext, useState, useEffect, useCallback } from 'react';
-import { useAuth } from './AuthContext';
+import { useAuth, useToast } from './hooks';
+import React, { useState, useEffect, useCallback } from 'react';
 import { departmentService } from '../services/departmentService';
 import { equipmentService } from '../services/equipmentService';
 import { labService } from '../services/labService';
@@ -8,9 +8,9 @@ import { transactionService } from '../services/transactionService';
 import { notificationService } from '../services/notificationService';
 import { userService } from '../services/userService';
 import { settingsService } from '../services/settingsService';
-import { useToast } from './ToastContext';
+import { formatDate } from '../utils/dateFormat';
 
-const LabTrackContext = createContext(null);
+import { LabTrackContext } from './contextDefinitions';
 
 export const LabTrackProvider = ({ children }) => {
   const { addToast } = useToast();
@@ -22,6 +22,7 @@ export const LabTrackProvider = ({ children }) => {
   const [transactionsList, setTransactionsList] = useState([]);
   const [notificationsList, setNotificationsList] = useState([]);
   const [usersList, setUsersList] = useState([]);
+  const [labAssignments, setLabAssignments] = useState([]);
   const [systemSettings, setSystemSettings] = useState({
     studentBorrowLimitDays: 14,
     facultyBorrowLimitDays: 30,
@@ -31,7 +32,22 @@ export const LabTrackProvider = ({ children }) => {
   });
   const [loading, setLoading] = useState(true);
 
-  const { isAuthenticated } = useAuth();
+  const { isAuthenticated, user: currentUser } = useAuth();
+
+  // FIX: Clear all cached state on logout to prevent stale data leaking across sessions
+  useEffect(() => {
+    if (!isAuthenticated) {
+      setDepartmentsList([]);
+      setEquipmentList([]);
+      setLabsList([]);
+      setRequestsList([]);
+      setTransfersList([]);
+      setTransactionsList([]);
+      setNotificationsList([]);
+      setUsersList([]);
+      setLabAssignments([]);
+    }
+  }, [isAuthenticated]);
 
   const refreshData = useCallback(async () => {
     if (!isAuthenticated) {
@@ -39,7 +55,7 @@ export const LabTrackProvider = ({ children }) => {
       return;
     }
     try {
-      const [depts, eq, labs, reqs, trfs, txns, notifs, users, settings] = await Promise.all([
+      const [depts, eq, labs, reqs, trfs, txns, notifs, users, settings, labAssignments] = await Promise.all([
         departmentService.getAll(),
         equipmentService.getAll(),
         labService.getAll(),
@@ -47,8 +63,9 @@ export const LabTrackProvider = ({ children }) => {
         requestService.getAllTransfers(),
         transactionService.getAll(),
         notificationService.getAll(),
-        userService.getAll(),
-        settingsService.get()
+        currentUser?.role === 'admin' ? userService.getAll() : Promise.resolve(currentUser ? [currentUser] : []),
+        settingsService.get(),
+        labService.getAssignments()
       ]);
 
       // Enrich requests with user/equipment/lab names for the UI
@@ -84,17 +101,38 @@ export const LabTrackProvider = ({ children }) => {
       setEquipmentList(eq);
       setLabsList(labs);
       setRequestsList(enrichedReqs);
-      setTransfersList(trfs);
+      const enrichedTrfs = trfs.map(tr => {
+        const fromLab = labs.find(l => l.id === tr.fromLabId) || {};
+        const toLab = labs.find(l => l.id === tr.toLabId) || {};
+        const user = users.find(u => u.id === tr.requesterId) || {};
+        return {
+          ...tr,
+          fromLabName: fromLab.name || 'Unknown Lab',
+          toLabName: toLab.name || 'Unknown Lab',
+          requesterName: tr.requesterName || user.name || 'Unknown User'
+        };
+      });
+      setTransfersList(enrichedTrfs);
       setTransactionsList(enrichedTxns);
       setNotificationsList(notifs);
-      setUsersList(users);
+      const enrichedUsers = users.map(u => {
+        if (u.role && u.role.toLowerCase() === 'assistant') {
+          return {
+            ...u,
+            assignedLabIds: labAssignments.filter(a => a.assistant_id === u.id).map(a => a.lab_id)
+          };
+        }
+        return u;
+      });
+      setUsersList(enrichedUsers);
+      setLabAssignments(labAssignments);
       if (settings) setSystemSettings(settings);
     } catch (err) {
       console.error('Error loading data:', err);
     } finally {
       setLoading(false);
     }
-  }, [isAuthenticated]);
+  }, [isAuthenticated, currentUser]);
 
   useEffect(() => {
     refreshData();
@@ -171,6 +209,11 @@ export const LabTrackProvider = ({ children }) => {
     const updatedLab = await labService.assignAssistant(labId, assistantUserId, assistantName);
     setLabsList(prev => prev.map(lab => lab.id === labId ? updatedLab : lab));
 
+    setLabAssignments(prev => {
+      const filtered = prev.filter(a => a.lab_id !== labId);
+      return [...filtered, { lab_id: labId, assistant_id: assistantUserId }];
+    });
+
     // Update user's assignedLabIds
     const assistantUser = usersList.find(u => u.id === assistantUserId);
     if (assistantUser) {
@@ -197,7 +240,8 @@ export const LabTrackProvider = ({ children }) => {
       category: 'equipment_addition',
       targetRoles: ['admin', 'assistant']
     });
-    setNotificationsList(prev => [notif, ...prev]);
+    // FIX: addNotification is a no-op stub returning null — guard before appending
+    if (notif) setNotificationsList(prev => [notif, ...prev]);
 
     addToast(`Equipment "${newItem.name}" (${newItem.quantity} unit${newItem.quantity > 1 ? 's' : ''}) registered with unique QR codes!`, 'success');
     return newItem;
@@ -217,7 +261,8 @@ export const LabTrackProvider = ({ children }) => {
       category: 'bulk_import',
       targetRoles: ['admin', 'assistant']
     });
-    setNotificationsList(prev => [notif, ...prev]);
+    // FIX: guard null return
+    if (notif) setNotificationsList(prev => [notif, ...prev]);
 
     addToast(`Successfully imported ${createdItems.length} equipment items with generated QR codes!`, 'success');
     return createdItems;
@@ -240,7 +285,9 @@ export const LabTrackProvider = ({ children }) => {
       setNotificationsList(prev => [notif, ...prev]);
     }
 
-    addToast(`Successfully imported ${response.modelsCreated} models with ${response.unitsCreated} units!`, 'success');
+    addToast(response.alreadyImported
+      ? 'This batch was already imported. No additional stock was created.'
+      : `Successfully imported ${response.modelsCreated} models with ${response.unitsCreated} units!`, 'success');
     return response;
   };
 
@@ -259,18 +306,15 @@ export const LabTrackProvider = ({ children }) => {
 
   // Club / Event Bulk Issue Action (Admin receives this notification)
   const issueEventAction = async (eventData) => {
-    const { eventName, coordinator, totalQty, returnDate } = eventData;
+    const { eventName, totalQty } = eventData;
 
-    // Note: addNotification is a no-op stub; backend handles notifications
-    await notificationService.addNotification({
-      title: `Club / Event Batch Issue: ${eventName}`,
-      message: `${coordinator} checked out ${totalQty} units for university event. Return due: ${returnDate}.`,
-      type: 'info',
-      category: 'bulk_event_issue',
-      targetRoles: ['admin', 'assistant', 'faculty']
-    });
+    // Call the actual API
+    await requestService.createEventIssue(eventData);
 
-    addToast(`Event equipment issue recorded for "${eventName}" (${totalQty} units)`, 'success');
+    // Refresh data since bulk items were just issued out
+    await refreshData();
+
+    addToast(`Event request submitted for "${eventName}" (${totalQty} units). Awaiting lab assistant approval.`, 'success');
   };
 
   // Redesigned Issue Equipment Action (Single unit - Admin is excluded from single issue alerts)
@@ -356,7 +400,7 @@ export const LabTrackProvider = ({ children }) => {
     };
 
     const newReq = await requestService.createRequest(enrichedData);
-    
+
     // Enrich the raw backend response with display names for the UI
     const enrichedReq = {
       ...newReq,
@@ -373,7 +417,7 @@ export const LabTrackProvider = ({ children }) => {
       requiredUntil: newReq.requiredUntil || newReq.required_until,
       status: newReq.status ? (newReq.status.charAt(0).toUpperCase() + newReq.status.slice(1).toLowerCase()) : 'Pending'
     };
-    
+
     setRequestsList(prev => [enrichedReq, ...prev]);
 
     // Notification stub (backend handles notifications)
@@ -419,7 +463,7 @@ export const LabTrackProvider = ({ children }) => {
       setTransactionsList(prev => prev.map(t => t.id === transactionId ? { ...t, dueDate: targetDueDate } : t));
     }
 
-    addToast(`Extension approved! Due date updated to ${targetDueDate}. No QR re-scan needed.`, 'success');
+    addToast(`Extension approved! Due date updated to ${formatDate(targetDueDate)}. No QR re-scan needed.`, 'success');
     return updatedReq;
   };
 
@@ -469,6 +513,7 @@ export const LabTrackProvider = ({ children }) => {
         transactionsList,
         notificationsList,
         usersList,
+        labAssignments,
         systemSettings,
         loading,
         refreshData,
@@ -502,10 +547,4 @@ export const LabTrackProvider = ({ children }) => {
       {children}
     </LabTrackContext.Provider>
   );
-};
-
-export const useLabTrack = () => {
-  const context = useContext(LabTrackContext);
-  if (!context) throw new Error('useLabTrack must be used within a LabTrackProvider');
-  return context;
 };

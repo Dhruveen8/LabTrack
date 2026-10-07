@@ -28,10 +28,16 @@ apiClient.interceptors.request.use(
 apiClient.interceptors.response.use(
   (response) => response,
   (error) => {
-    if (error.response && error.response.status === 401) {
-      // Clear token and redirect to login if unauthorized
+    const status = error.response?.status;
+    // FIX: Handle both 401 (unauthenticated) and 403 (forbidden/token expired)
+    // FastAPI's OAuth2PasswordBearer can return either depending on the error type.
+    // Only treat 403 as a session expiry if there is NO active token in storage
+    // (to avoid logging out on valid permission-denied responses like "Not your lab")
+    if (status === 401) {
       localStorage.removeItem('labtrack_access_token');
-      // Dispatch a custom event to notify AuthContext or use a callback
+      window.dispatchEvent(new Event('unauthorized'));
+    } else if (status === 403 && !localStorage.getItem('labtrack_access_token')) {
+      // 403 with no stored token = unauthenticated, redirect to login
       window.dispatchEvent(new Event('unauthorized'));
     }
     return Promise.reject(error);

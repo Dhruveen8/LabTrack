@@ -1,7 +1,6 @@
+import { useAuth, useLabTrack } from '../context/hooks';
 import React, { useState } from 'react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
-import { useAuth } from '../context/AuthContext';
-import { useLabTrack } from '../context/LabTrackContext';
 import { NotificationPanel } from '../components/notification/NotificationPanel';
 import { Breadcrumb } from '../components/common/Breadcrumb';
 import {
@@ -63,6 +62,7 @@ export const MainLayout = ({ children }) => {
       return [
         { label: 'Dashboard', path: '/admin/dashboard', icon: LayoutDashboard },
         { label: 'Labs', path: '/labs', icon: Building2 },
+        { label: 'Event / Club Requests', path: '/event-issue', icon: CalendarCheck },
         { label: 'Equipment', path: '/equipment', icon: Package },
         { label: 'Users', path: '/users', icon: Users },
         { label: 'Transactions', path: '/transactions', icon: History },
@@ -82,6 +82,7 @@ export const MainLayout = ({ children }) => {
         { label: 'Issue Equipment', path: '/issue-equipment', icon: QrCode },
         { label: 'Return Equipment', path: '/return-equipment', icon: History },
         { label: 'Bulk Import', path: '/bulk-import', icon: PackagePlus },
+        { label: 'Event / Club Requests', path: '/event-issue', icon: CalendarCheck },
         { label: 'Requests', path: '/requests', icon: FileSpreadsheet },
         { label: 'Inter-Lab Transfers', path: '/inter-lab-transfers', icon: ArrowRightLeft },
         { label: 'Transactions', path: '/transactions', icon: History },
@@ -98,7 +99,7 @@ export const MainLayout = ({ children }) => {
         { label: 'My Borrowings', path: '/transactions', icon: BookOpen },
         { label: 'My Requests', path: '/requests', icon: FileSpreadsheet },
         { label: 'Quick Borrow Counter', path: '/quick-borrow', icon: Zap },
-        { label: 'Event / Club Issue', path: '/event-issue', icon: CalendarCheck },
+        { label: 'Event / Club Requests', path: '/event-issue', icon: CalendarCheck },
         { label: 'Inter-Lab Requests', path: '/inter-lab-transfers', icon: ArrowRightLeft },
         { label: 'Notifications', path: '/notifications', icon: Bell, badge: unreadCount },
         { label: 'Profile', path: '/profile', icon: User }
@@ -145,7 +146,7 @@ export const MainLayout = ({ children }) => {
           }}
         >
           <span>OFFICIAL UNIVERSITY LABORATORY MANAGEMENT PORTAL</span>
-          <span>Academic Year 2025–2026</span>
+          <span>Academic Year 2026–2027</span>
         </div>
 
         {/* Main Header Bar */}

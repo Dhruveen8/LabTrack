@@ -1,7 +1,7 @@
+import { useLabTrack, useAuth } from '../../context/hooks';
+import { formatDate } from '../../utils/dateFormat';
 import React, { useState } from 'react';
 import { PageHeader } from '../../components/common/PageHeader';
-import { useLabTrack } from '../../context/LabTrackContext';
-import { useAuth } from '../../context/AuthContext';
 import { useNavigate } from 'react-router-dom';
 import { Send, Clock, AlertCircle, Calendar } from 'lucide-react';
 
@@ -153,7 +153,7 @@ export const RequestEquipmentPage = () => {
               />
             </div>
             <div className="form-group">
-              <label className="form-label">Required Until Date (Max: {maxAllowedDate})</label>
+              <label className="form-label">Required Until Date (Max: {formatDate(maxAllowedDate)})</label>
               <input
                 type="date"
                 className="form-control"

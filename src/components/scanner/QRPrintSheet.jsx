@@ -1,6 +1,6 @@
 import React from 'react';
 import { QRCodeSVG } from 'qrcode.react';
-import { Printer, X, CheckCircle2 } from 'lucide-react';
+import { Printer, X } from 'lucide-react';
 
 export const QRPrintSheet = ({ items = [], onClose, title = 'Equipment QR Code Label Sheet' }) => {
   const handlePrint = () => {
@@ -79,7 +79,10 @@ export const QRPrintSheet = ({ items = [], onClose, title = 'Equipment QR Code L
         >
           {items.map((item, idx) => {
             const assetId = item.assetId || item.id || `LT-EQ-${idx + 1}`;
-            const qrPayload = item.qrCodeUrl || `https://labtrack.univ.edu/equipment/${assetId}`;
+            // FIX: Encode only the bare asset ID, NOT a full URL.
+            // The scan handler (IssueEquipmentPage, ReturnEquipmentPage) uses this value
+            // directly as the asset_id parameter in API calls. Encoding a URL would cause 404.
+            const qrPayload = assetId;
 
             return (
               <div

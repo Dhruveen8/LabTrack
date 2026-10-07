@@ -1,10 +1,11 @@
 import React from 'react';
 import { PageHeader } from '../../components/common/PageHeader';
-import { useAuth } from '../../context/AuthContext';
-import { User, Mail, Shield, Building2, Phone, CreditCard } from 'lucide-react';
+import { useAuth, useLabTrack } from '../../context/hooks';
+import { resolveUserDepartment } from '../../utils/userDepartment';
 
 export const ProfilePage = () => {
   const { user } = useAuth();
+  const { departmentsList } = useLabTrack();
 
   return (
     <div>
@@ -21,9 +22,9 @@ export const ProfilePage = () => {
         </div>
 
         <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem', fontSize: '0.9rem' }}>
-          <div><strong>University ID:</strong> {user?.universityId}</div>
+          <div><strong>User ID:</strong> {user?.displayId || user?.universityId}</div>
           <div><strong>Email Address:</strong> {user?.email}</div>
-          <div><strong>Department:</strong> {user?.department}</div>
+          <div><strong>Department:</strong> {resolveUserDepartment(user, departmentsList)}</div>
           <div><strong>Contact Phone:</strong> {user?.phone || '+1 (555) 012-3390'}</div>
           <div><strong>Account Status:</strong> <span className="badge badge-success">Active & Verified</span></div>
         </div>

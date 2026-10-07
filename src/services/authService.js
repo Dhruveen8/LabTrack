@@ -17,10 +17,15 @@ export const authService = {
 
     const { access_token } = response.data;
     localStorage.setItem(AUTH_KEY, access_token);
-    
+
     // Fetch and return user profile
     const userRes = await apiClient.get('/auth/me');
-    return { success: true, user: userRes.data };
+    const user = userRes.data;
+    if (user.role === 'ASSISTANT' || user.role === 'assistant') {
+      const assignsRes = await apiClient.get('/labs/assignments');
+      user.assigned_labs = assignsRes.data.filter(a => a.assistant_id === user.id).map(a => a.lab_id);
+    }
+    return { success: true, user: user };
   },
 
   logout: async () => {
@@ -33,8 +38,13 @@ export const authService = {
     if (!token) return null;
     try {
       const response = await apiClient.get('/auth/me');
-      return response.data;
-    } catch (e) {
+      const user = response.data;
+      if (user.role === 'ASSISTANT' || user.role === 'assistant') {
+        const assignsRes = await apiClient.get('/labs/assignments');
+        user.assigned_labs = assignsRes.data.filter(a => a.assistant_id === user.id).map(a => a.lab_id);
+      }
+      return user;
+    } catch {
       localStorage.removeItem(AUTH_KEY);
       return null;
     }

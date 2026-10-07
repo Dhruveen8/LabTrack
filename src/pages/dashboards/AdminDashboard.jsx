@@ -1,11 +1,11 @@
 import React from 'react';
-import { useLabTrack } from '../../context/LabTrackContext';
+import { useLabTrack } from '../../context/hooks';
 import { PageHeader } from '../../components/common/PageHeader';
 import { StatCard } from '../../components/common/StatCard';
 import { DataTable } from '../../components/common/DataTable';
 import { StatusBadge } from '../../components/common/StatusBadge';
 import { Link } from 'react-router-dom';
-import { Package, CheckCircle, Clock, AlertTriangle, FileSpreadsheet, Building2, Users, BarChart, ArrowRight, BrainCircuit } from 'lucide-react';
+import { Package, CheckCircle, Clock, AlertTriangle, FileSpreadsheet, Building2, Users, BarChart, ArrowRight } from 'lucide-react';
 import { BarChart as ReBarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, PieChart, Pie, Cell } from 'recharts';
 
 export const AdminDashboard = () => {

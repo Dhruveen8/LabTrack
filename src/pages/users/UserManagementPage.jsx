@@ -2,15 +2,17 @@ import React, { useState } from 'react';
 import { PageHeader } from '../../components/common/PageHeader';
 import { DataTable } from '../../components/common/DataTable';
 import { StatusBadge } from '../../components/common/StatusBadge';
-import { useLabTrack } from '../../context/LabTrackContext';
-import { Building2, Shield, User, UserPlus, X, CheckCircle2 } from 'lucide-react';
+import { useLabTrack } from '../../context/hooks';
+import { Building2, UserPlus, X } from 'lucide-react';
 import { Link } from 'react-router-dom';
+import { userService } from '../../services/userService';
 
 export const UserManagementPage = () => {
   const { usersList, labsList, departmentsList, addUser } = useLabTrack();
 
   const [showAddUserModal, setShowAddUserModal] = useState(false);
   const [filterRole, setFilterRole] = useState('ALL');
+  const [showStudents, setShowStudents] = useState(false);
 
   const [newUserData, setNewUserData] = useState({
     name: '',
@@ -57,16 +59,16 @@ export const UserManagementPage = () => {
     });
   };
 
-  let filteredUsers = usersList;
-  if (filterRole !== 'ALL') {
-    filteredUsers = usersList.filter(u => u.role?.toLowerCase() === filterRole.toLowerCase());
-  }
+  const staffUsers = usersList.filter(user => ['assistant', 'faculty'].includes(user.role?.toLowerCase()));
+  const studentUsers = usersList.filter(user => user.role?.toLowerCase() === 'student');
+  const filteredUsers = showStudents ? studentUsers : staffUsers.filter(user =>
+    filterRole === 'ALL' || user.role?.toLowerCase() === filterRole);
 
   const columns = [
     {
       header: 'University ID',
       accessor: 'universityId',
-      cell: (row) => <span style={{ fontWeight: 700, fontFamily: 'monospace', color: '#1e40af' }}>{row.universityId || row.id}</span>
+      cell: (row) => <span style={{ fontWeight: 700, fontFamily: 'monospace', color: '#1e40af' }}>{row.displayId || row.universityId || row.id}</span>
     },
     {
       header: 'User Profile',
@@ -116,14 +118,33 @@ export const UserManagementPage = () => {
     },
     {
       header: 'Status',
-      cell: (row) => <StatusBadge status={row.status} />
+      cell: (row) => (
+        <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
+          <StatusBadge status={row.accountStatus} />
+          {row.accountStatus === 'PENDING' && (
+            <button
+              className="btn btn-primary btn-sm"
+              onClick={async () => {
+                try {
+                  await userService.updateStatus(row.id, 'ACTIVE');
+                  window.location.reload(); // simple refresh
+                } catch {
+                  alert('Error updating status');
+                }
+              }}
+            >
+              Approve
+            </button>
+          )}
+        </div>
+      )
     }
   ];
 
   return (
     <div>
       <PageHeader
-        title="University User Directory & Role Administration"
+        title={showStudents ? 'Student Directory' : 'Faculty & Lab Assistant Administration'}
         subtitle="Register and manage Lab Assistants, Faculty members, and Student portal accounts"
         actions={
           <div style={{ display: 'flex', gap: '0.5rem' }}>
@@ -139,16 +160,20 @@ export const UserManagementPage = () => {
 
       {/* Role Filters */}
       <div style={{ display: 'flex', gap: '0.5rem', marginBottom: '1rem', flexWrap: 'wrap' }}>
-        {['ALL', 'assistant', 'faculty', 'student', 'admin'].map(role => (
+        {['ALL', 'assistant', 'faculty'].map(role => (
           <button
             key={role}
-            onClick={() => setFilterRole(role)}
-            className={`btn btn-sm ${filterRole === role ? 'btn-primary' : 'btn-secondary'}`}
+            onClick={() => { setShowStudents(false); setFilterRole(role); }}
+            className={`btn btn-sm ${!showStudents && filterRole === role ? 'btn-primary' : 'btn-secondary'}`}
             style={{ textTransform: 'capitalize' }}
           >
-            {role === 'ALL' ? `All Users (${usersList.length})` : `${role}s (${usersList.filter(u => u.role?.toLowerCase() === role.toLowerCase()).length})`}
+            {role === 'ALL' ? `All Staff (${staffUsers.length})` : `${role === 'faculty' ? 'Faculty' : 'Lab Assistants'} (${staffUsers.filter(u => u.role?.toLowerCase() === role).length})`}
           </button>
         ))}
+        <button className={`btn btn-sm ${showStudents ? 'btn-primary' : 'btn-secondary'}`}
+          aria-pressed={showStudents} onClick={() => setShowStudents(true)}>
+          View Students ({studentUsers.length})
+        </button>
       </div>
 
       <div className="portal-card">
@@ -204,10 +229,10 @@ export const UserManagementPage = () => {
                   <input
                     type="text"
                     className="form-control"
-                    placeholder="e.g. LAB-2024-089 or FAC-2024-115"
+                    placeholder={newUserData.role === 'assistant' ? 'Assigned automatically: ASST001' : newUserData.role === 'faculty' ? 'FCE001' : '24CE069 or D25CE150 (D2D)'}
                     value={newUserData.universityId}
                     onChange={(e) => setNewUserData({ ...newUserData, universityId: e.target.value })}
-                    required
+                    disabled={newUserData.role === 'assistant'}
                   />
                 </div>
 
@@ -287,7 +312,7 @@ export const UserManagementPage = () => {
                           />
                           <div>
                             <div style={{ fontWeight: 600, color: '#0f172a' }}>{lab.name}</div>
-                            <div style={{ fontSize: '0.7rem', color: '#64748b' }}>{lab.id}</div>
+                            <div style={{ fontSize: '0.7rem', color: '#64748b' }}>{lab.displayId}</div>
                           </div>
                         </label>
                       );

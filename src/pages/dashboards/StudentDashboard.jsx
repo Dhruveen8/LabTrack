@@ -1,19 +1,33 @@
+import { useAuth, useLabTrack } from '../../context/hooks';
 import React from 'react';
-import { useAuth } from '../../context/AuthContext';
-import { useLabTrack } from '../../context/LabTrackContext';
 import { PageHeader } from '../../components/common/PageHeader';
 import { StatCard } from '../../components/common/StatCard';
 import { DataTable } from '../../components/common/DataTable';
 import { StatusBadge } from '../../components/common/StatusBadge';
 import { Link } from 'react-router-dom';
 import { Search, Send, BookOpen, Clock, AlertCircle, CheckCircle2 } from 'lucide-react';
+import { resolveUserDepartment } from '../../utils/userDepartment';
 
 export const StudentDashboard = () => {
   const { user } = useAuth();
-  const { transactionsList, requestsList } = useLabTrack();
+  const { transactionsList, requestsList, departmentsList } = useLabTrack();
 
-  const myBorrowings = transactionsList.filter(t => t.borrowerId === user?.universityId || t.borrowerName.includes('Alex') || t.status === 'Issued');
-  const myRequests = requestsList.filter(r => r.requesterId === user?.universityId || r.requesterRole === 'Student');
+  // FIX: Filter strictly by the current user's numeric ID, not by hardcoded names or role.
+  // Also separate ACTIVE borrowings from historical all-time borrowings.
+  const myAllBorrowings = transactionsList.filter(t => t.borrowerId === user?.id);
+  // FIX: "Currently Borrowed" means ACTIVE transactions only — not returned ones
+  const myActiveBorrowings = myAllBorrowings.filter(
+    t => t.status === 'Active' || t.status === 'ACTIVE'
+  );
+  const myRequests = requestsList.filter(r => r.requesterId === user?.id);
+  const pendingRequests = myRequests.filter(r => r.status === 'Pending' || r.status === 'PENDING');
+
+  // Due soon = active borrowings whose due date is within 3 days
+  const dueSoonCount = myActiveBorrowings.filter(t => {
+    const due = new Date(t.dueDate);
+    const diffMs = due - Date.now();
+    return diffMs > 0 && diffMs < 3 * 24 * 60 * 60 * 1000;
+  }).length;
 
   const columns = [
     { header: 'TXN ID', accessor: 'id' },
@@ -30,8 +44,8 @@ export const StudentDashboard = () => {
   return (
     <div>
       <PageHeader
-        title={`Student Portal - ${user?.name || 'Alex Johnson'}`}
-        subtitle={`University ID: ${user?.universityId || 'STU-2024-884'} | Department: ${user?.department || 'Computer Science'}`}
+        title={`Student Portal — ${user?.name || 'Student'}`}
+        subtitle={`University ID: ${user?.universityId || user?.id} | Department: ${resolveUserDepartment(user, departmentsList)}`}
       />
 
       {/* Quick Action Strip */}
@@ -51,19 +65,21 @@ export const StudentDashboard = () => {
 
       {/* Student KPI Stats */}
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: '1rem', marginBottom: '1.5rem' }}>
-        <StatCard title="Currently Borrowed" value={myBorrowings.length} icon={BookOpen} color="blue" />
-        <StatCard title="Pending Requests" value={myRequests.filter(r => r.status === 'Pending').length} icon={Clock} color="amber" />
-        <StatCard title="Due Soon" value="1" icon={AlertCircle} color="danger" />
-        <StatCard title="Total Borrowings" value={myBorrowings.length + 3} icon={CheckCircle2} color="green" />
+        <StatCard title="Currently Borrowed" value={myActiveBorrowings.length} icon={BookOpen} color="blue" />
+        <StatCard title="Pending Requests" value={pendingRequests.length} icon={Clock} color="amber" />
+        {/* FIX: Real due-soon count, not hardcoded "1" */}
+        <StatCard title="Due Soon" value={dueSoonCount} icon={AlertCircle} color="danger" />
+        {/* FIX: Total lifetime borrowings without fabricated offset */}
+        <StatCard title="Total Borrowings" value={myAllBorrowings.length} icon={CheckCircle2} color="green" />
       </div>
 
-      {/* Current Borrowings Table */}
+      {/* Current Borrowings Table — show ACTIVE only */}
       <div className="portal-card">
         <div className="portal-header">
           <div className="portal-title">My Current Borrowings</div>
           <div className="portal-subtitle">Items currently checked out to your university ID</div>
         </div>
-        <DataTable columns={columns} data={myBorrowings} emptyMessage="You have no active equipment borrowings" />
+        <DataTable columns={columns} data={myActiveBorrowings} emptyMessage="You have no active equipment borrowings" />
       </div>
     </div>
   );

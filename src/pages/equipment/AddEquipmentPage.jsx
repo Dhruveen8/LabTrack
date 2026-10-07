@@ -1,11 +1,9 @@
+import { useLabTrack, useAuth } from '../../context/hooks';
 import React, { useState } from 'react';
 import { PageHeader } from '../../components/common/PageHeader';
-import { QRCodeDisplay } from '../../components/scanner/QRCodeDisplay';
 import { QRPrintSheet } from '../../components/scanner/QRPrintSheet';
-import { useLabTrack } from '../../context/LabTrackContext';
-import { useAuth } from '../../context/AuthContext';
 import { useNavigate } from 'react-router-dom';
-import { QrCode, Save, X, Printer, CheckCircle2 } from 'lucide-react';
+import { Save, X } from 'lucide-react';
 
 export const AddEquipmentPage = () => {
   const navigate = useNavigate();

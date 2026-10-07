@@ -1,10 +1,9 @@
+import { useLabTrack, useAuth } from '../../context/hooks';
 import React, { useState } from 'react';
 import { PageHeader } from '../../components/common/PageHeader';
 import { DataTable } from '../../components/common/DataTable';
 import { StatusBadge } from '../../components/common/StatusBadge';
 import { QRPrintSheet } from '../../components/scanner/QRPrintSheet';
-import { useLabTrack } from '../../context/LabTrackContext';
-import { useAuth } from '../../context/AuthContext';
 import { Link } from 'react-router-dom';
 import { Plus, Upload, Eye, Trash2, Printer, Layers, QrCode } from 'lucide-react';
 

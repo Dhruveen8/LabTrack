@@ -1,10 +1,11 @@
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.future import select
-from typing import List
+from sqlalchemy.exc import IntegrityError
+from typing import List, Dict, Any
 
 from app.db.database import get_db
-from app.db.models import Lab, Department, RoleEnum, User
+from app.db.models import Lab, Department, RoleEnum, User, LabAssistantAssignment
 from app.schemas.department_lab import LabCreate, LabResponse
 from app.api.deps import require_role, get_current_user, require_admin
 
@@ -20,10 +21,14 @@ async def create_lab(
     dept_result = await db.execute(select(Department).where(Department.id == lab_in.department_id))
     if not dept_result.scalars().first():
         raise HTTPException(status_code=404, detail="Department not found")
-        
+
     lab = Lab(**lab_in.model_dump())
     db.add(lab)
-    await db.commit()
+    try:
+        await db.commit()
+    except IntegrityError:
+        await db.rollback()
+        raise HTTPException(status_code=409, detail='Lab code already exists')
     await db.refresh(lab)
     return lab
 
@@ -35,6 +40,15 @@ async def list_labs(
 ):
     result = await db.execute(select(Lab))
     return result.scalars().all()
+
+@router.get("/assignments", response_model=List[Dict[str, Any]])
+async def list_assignments(
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    result = await db.execute(select(LabAssistantAssignment))
+    assignments = result.scalars().all()
+    return [{"lab_id": a.lab_id, "assistant_id": a.assistant_id} for a in assignments]
 
 # --- BE-3b: Lab CRUD ---
 @router.get("/{lab_id}", response_model=LabResponse)
@@ -60,12 +74,18 @@ async def update_lab(
     lab = result.scalars().first()
     if not lab:
         raise HTTPException(status_code=404, detail="Lab not found")
-    
+
     update_data = lab_in.model_dump()
+    if not await db.get(Department, lab_in.department_id):
+        raise HTTPException(status_code=404, detail='Department not found')
     for field, value in update_data.items():
         setattr(lab, field, value)
-    
-    await db.commit()
+
+    try:
+        await db.commit()
+    except IntegrityError:
+        await db.rollback()
+        raise HTTPException(status_code=409, detail='Lab code already exists')
     await db.refresh(lab)
     return lab
 
@@ -79,9 +99,13 @@ async def delete_lab(
     lab = result.scalars().first()
     if not lab:
         raise HTTPException(status_code=404, detail="Lab not found")
-    
+
     await db.delete(lab)
-    await db.commit()
+    try:
+        await db.commit()
+    except IntegrityError:
+        await db.rollback()
+        raise HTTPException(status_code=409, detail='Cannot delete a lab with equipment or borrowing history')
     return {"message": "Lab deleted successfully"}
 
 @router.post("/{lab_id}/assign_assistant")
@@ -95,20 +119,28 @@ async def assign_assistant(
     lab = lab_result.scalars().first()
     if not lab:
         raise HTTPException(status_code=404, detail="Lab not found")
-        
+
     user_result = await db.execute(select(User).where(User.id == assistant_id))
     assistant = user_result.scalars().first()
     if not assistant or assistant.role != RoleEnum.ASSISTANT:
         raise HTTPException(status_code=400, detail="User is not a valid assistant")
-        
-    lab.incharge_user_id = assistant.id
-    
-    # Update assistant's assigned_labs array
-    assigned_labs = assistant.assigned_labs or []
-    if lab_id not in assigned_labs:
-        assigned_labs.append(lab_id)
-        # Using SQLAlchemy JSON mutation trick or just reassigning
-        assistant.assigned_labs = assigned_labs.copy()
-        
+
+    # FIX: Upsert by lab_id alone — if any assignment exists for this lab,
+    # update it to the new assistant (replacing the previous one).
+    existing_res = await db.execute(
+        select(LabAssistantAssignment)
+        .where(LabAssistantAssignment.lab_id == lab_id)
+    )
+    existing = existing_res.scalars().first()
+    if existing:
+        existing.assistant_id = assistant.id
+        existing.assigned_by_id = current_user.id
+    else:
+        db.add(LabAssistantAssignment(
+            lab_id=lab_id,
+            assistant_id=assistant.id,
+            assigned_by_id=current_user.id
+        ))
+
     await db.commit()
-    return {"message": "Assistant assigned successfully"}
+    return {"message": "Assistant assigned successfully", "lab_id": lab_id, "assistant_id": assistant.id}

@@ -25,7 +25,7 @@ export const BarcodeScanner = ({ onScan, title = 'Scan Code', placeholder = 'Ent
       if (onScan) onScan(decodedText);
     };
 
-    const handleScanFailure = (error) => {
+    const handleScanFailure = (_error) => {
       // Ignored: html5-qrcode continuously fires this while seeking a barcode
     };
 

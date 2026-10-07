@@ -1,4 +1,4 @@
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 from typing import Optional, List
 from app.db.models import UnitStatusEnum, EquipmentTypeEnum
 
@@ -14,7 +14,8 @@ class EquipmentModelCreate(EquipmentModelBase):
 
 class EquipmentModelResponse(EquipmentModelBase):
     id: int
-    total_quantity: int
+    total_quantity: int = 0
+    available_quantity: int = 0
     equipment_type: Optional[EquipmentTypeEnum] = EquipmentTypeEnum.STANDARD
 
     class Config:
@@ -31,6 +32,7 @@ class EquipmentUnitCreate(EquipmentUnitBase):
 class EquipmentUnitResponse(EquipmentUnitBase):
     asset_id: str
     model_id: int
+    lab_id: int
     status: UnitStatusEnum
     qr_code_url: Optional[str] = None
 
@@ -41,7 +43,7 @@ class EquipmentUnitResponse(EquipmentUnitBase):
 class BulkImportRow(BaseModel):
     model_name: str
     category: str
-    quantity: int
+    quantity: int = Field(ge=1, le=10000)
     description: Optional[str] = None
 
 # --- New schemas for Phase 2 CRUD ---
@@ -58,18 +60,18 @@ class UnitStatusUpdate(BaseModel):
 
 class BulkUnitCreate(BaseModel):
     model_id: int
-    quantity: int
+    quantity: int = Field(ge=1, le=10000)
 
 # --- Schemas for Excel Bulk Import ---
 class BulkExcelImportRow(BaseModel):
     name: str
-    quantity: int
+    quantity: int = Field(ge=1, le=10000)
     category: str
     serial_prefix: Optional[str] = None
     condition: Optional[str] = None
     description: Optional[str] = None
 
 class BulkExcelImportRequest(BaseModel):
-    items: List[BulkExcelImportRow]
+    items: List[BulkExcelImportRow] = Field(min_length=1, max_length=1000)
     lab_id: Optional[int] = None
 

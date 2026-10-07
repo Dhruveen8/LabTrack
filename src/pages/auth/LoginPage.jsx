@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
-import { useNavigate } from 'react-router-dom';
-import { useAuth } from '../../context/AuthContext';
-import { ShieldCheck, UserCheck, GraduationCap, Briefcase, Lock, User, ArrowRight } from 'lucide-react';
+import { useNavigate, Link } from 'react-router-dom';
+import { useAuth } from '../../context/hooks';
+import { Lock, User, ArrowRight } from 'lucide-react';
 
 export const LoginPage = () => {
   const navigate = useNavigate();
@@ -10,7 +10,7 @@ export const LoginPage = () => {
   const [emailOrId, setEmailOrId] = useState('');
   const [password, setPassword] = useState('');
   const [rememberMe, setRememberMe] = useState(true);
-  const [selectedRole, setSelectedRole] = useState('admin');
+  const [selectedRole] = useState('admin');
   // --- NR-4: Login error state ---
   const [loginError, setLoginError] = useState('');
 
@@ -33,7 +33,6 @@ export const LoginPage = () => {
       navigateToRoleDashboard(selectedRole);
     }
   };
-
 
   const navigateToRoleDashboard = (role) => {
     switch (role) {
@@ -188,9 +187,13 @@ export const LoginPage = () => {
               </label>
             </div>
 
-            <button type="submit" className="btn btn-primary" style={{ width: '100%', padding: '0.65rem' }}>
+            <button type="submit" className="btn btn-primary" style={{ width: '100%', padding: '0.65rem', marginBottom: '1rem' }}>
               Sign In to Portal <ArrowRight size={16} />
             </button>
+
+            <div style={{ textAlign: 'center', fontSize: '0.85rem', color: '#475569' }}>
+              Don't have an account? <Link to="/register" style={{ color: '#1e40af', fontWeight: 600, textDecoration: 'none' }}>Register here</Link>
+            </div>
           </form>
 
         </div>

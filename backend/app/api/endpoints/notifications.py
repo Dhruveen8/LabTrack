@@ -7,7 +7,14 @@ from pydantic import BaseModel
 from datetime import datetime
 
 from app.db.database import get_db
-from app.db.models import Notification, NotificationTypeEnum, NotificationCategoryEnum, User
+from app.db.models import (
+    Notification,
+    NotificationTypeEnum,
+    NotificationCategoryEnum,
+    User,
+    NotificationEmail,
+)
+from app.core.config import settings
 from app.api.deps import get_current_user
 
 router = APIRouter()
@@ -53,7 +60,7 @@ async def mark_as_read(
     notif = result.scalars().first()
     if not notif:
         raise HTTPException(status_code=404, detail="Notification not found")
-    
+
     notif.read = True
     await db.commit()
     await db.refresh(notif)
@@ -88,7 +95,12 @@ async def unread_count(
     return {"unreadCount": count}
 
 async def create_notification(db: AsyncSession, user_id: int, title: str, message: str, type: NotificationTypeEnum, category: NotificationCategoryEnum):
-    """Helper function to create notifications server-side."""
+    """Helper function to create a notification record.
+
+    The notification is added to the current session. The CALLER must call
+    db.commit() after this to persist it. This ensures the notification is
+    committed in the same transaction as the business action it belongs to.
+    """
     notif = Notification(
         user_id=user_id,
         title=title,
@@ -98,5 +110,7 @@ async def create_notification(db: AsyncSession, user_id: int, title: str, messag
         read=False
     )
     db.add(notif)
-    await db.flush()
+    if settings.email_enabled:
+        await db.flush()
+        db.add(NotificationEmail(notification_id=notif.id))
     return notif

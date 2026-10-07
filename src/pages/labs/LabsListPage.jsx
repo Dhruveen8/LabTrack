@@ -1,13 +1,12 @@
+import { useLabTrack, useAuth } from '../../context/hooks';
 import React, { useState } from 'react';
 import { PageHeader } from '../../components/common/PageHeader';
-import { useLabTrack } from '../../context/LabTrackContext';
-import { useAuth } from '../../context/AuthContext';
-import { Building2, Package, CheckCircle, Clock, Wrench, UserCheck, Plus, UserPlus, X } from 'lucide-react';
+import { Building2, Package, UserCheck, Plus, UserPlus, X } from 'lucide-react';
 import { Link } from 'react-router-dom';
 
 export const LabsListPage = () => {
   const { user } = useAuth();
-  const { labsList, departmentsList, usersList, addLab, assignAssistantToLab } = useLabTrack();
+  const { labsList, departmentsList, usersList, labAssignments, addLab, assignAssistantToLab } = useLabTrack();
 
   const [selectedDeptId, setSelectedDeptId] = useState('ALL');
   const [showAddLabModal, setShowAddLabModal] = useState(false);
@@ -19,7 +18,7 @@ export const LabsListPage = () => {
     departmentId: departmentsList[0]?.id || '',
     location: '',
     description: '',
-    inchargeUserId: null
+    assistantId: null
   });
 
   const [selectedAssistantId, setSelectedAssistantId] = useState(null);
@@ -38,13 +37,16 @@ export const LabsListPage = () => {
     if (!newLabData.name.trim()) return alert('Please enter laboratory name');
 
     const selectedDept = departmentsList.find(d => d.id === parseInt(newLabData.departmentId));
-    const selectedAss = usersList.find(u => u.id === parseInt(newLabData.inchargeUserId));
+    const selectedAss = usersList.find(u => u.id === parseInt(newLabData.assistantId));
 
-    await addLab({
+    const newLab = await addLab({
       ...newLabData,
-      departmentName: selectedDept ? selectedDept.name : '',
-      incharge: selectedAss ? selectedAss.name : 'Unassigned'
+      departmentName: selectedDept ? selectedDept.name : ''
     });
+
+    if (newLabData.assistantId && newLab) {
+      await assignAssistantToLab(newLab.id, parseInt(newLabData.assistantId), selectedAss ? selectedAss.name : 'Assistant');
+    }
 
     setShowAddLabModal(false);
     setNewLabData({
@@ -52,7 +54,7 @@ export const LabsListPage = () => {
       departmentId: departmentsList[0]?.id || '',
       location: '',
       description: '',
-      inchargeUserId: null
+      assistantId: null
     });
   };
 
@@ -70,7 +72,8 @@ export const LabsListPage = () => {
 
   const openAssignModal = (lab) => {
     setTargetLab(lab);
-    setSelectedAssistantId(lab.incharge_user_id || lab.inchargeUserId || assistants[0]?.id || null);
+    const assignment = labAssignments?.find(a => a.lab_id === lab.id);
+    setSelectedAssistantId(assignment?.assistant_id || assistants[0]?.id || null);
     setShowAssignModal(true);
   };
 
@@ -118,7 +121,8 @@ export const LabsListPage = () => {
         {filteredLabs.map(lab => {
           const isUserAssigned = user?.assignedLabIds?.includes(lab.id);
           const dept = departmentsList.find(d => d.id === (lab.department_id || lab.departmentId));
-          const inchargeUser = usersList.find(u => u.id === lab.incharge_user_id);
+          const assignment = labAssignments?.find(a => a.lab_id === lab.id);
+          const assignedAssistant = assignment ? usersList.find(u => u.id === assignment.assistant_id) : null;
 
           return (
             <div
@@ -135,7 +139,7 @@ export const LabsListPage = () => {
                 <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '0.5rem' }}>
                   <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', color: '#1e40af' }}>
                     <Building2 size={20} />
-                    <span style={{ fontSize: '0.8rem', fontWeight: 800, fontFamily: 'monospace' }}>{lab.id}</span>
+                    <span style={{ fontSize: '0.8rem', fontWeight: 800, fontFamily: 'monospace' }}>{lab.displayId}</span>
                   </div>
                   <span className="badge badge-info" style={{ fontSize: '0.7rem' }}>
                     {dept?.name || lab.departmentName || lab.departmentId}
@@ -153,7 +157,7 @@ export const LabsListPage = () => {
                 <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', backgroundColor: '#f1f5f9', padding: '0.5rem 0.75rem', borderRadius: '6px', marginBottom: '0.75rem' }}>
                   <div style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '0.8rem', color: '#334155' }}>
                     <UserCheck size={16} color="#1e40af" />
-                    <span>In-Charge: <strong>{inchargeUser?.name || lab.incharge || 'Unassigned'}</strong></span>
+                    <span>Assistant: <strong>{assignedAssistant?.name || 'Unassigned'}</strong></span>
                   </div>
                   {isAdmin && (
                     <button
@@ -233,11 +237,11 @@ export const LabsListPage = () => {
                   <label className="form-label">Assign Lab Assistant</label>
                   <select
                     className="form-select"
-                    value={newLabData.inchargeUserId}
-                    onChange={(e) => setNewLabData({ ...newLabData, inchargeUserId: e.target.value })}
+                    value={newLabData.assistantId}
+                    onChange={(e) => setNewLabData({ ...newLabData, assistantId: e.target.value })}
                   >
                     {assistants.map(a => (
-                      <option key={a.id} value={a.id}>{a.name} ({a.universityId})</option>
+                      <option key={a.id} value={a.id}>{a.name} ({a.displayId || a.universityId || a.id})</option>
                     ))}
                   </select>
                 </div>
