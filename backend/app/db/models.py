@@ -225,6 +225,7 @@ class EventRequest(Base):
     coordinator_id = Column(Integer, ForeignKey('users.id', ondelete='RESTRICT'), nullable=False)
     lab_id = Column(Integer, ForeignKey('labs.id', ondelete='RESTRICT'), nullable=False)
     unit_asset_ids = Column(JSON, nullable=False)
+    requested_items = Column(JSON, nullable=False, server_default=text("'[]'"))
     due_date = Column(DateTime(timezone=True), nullable=False)
     status = Column(String(16), nullable=False, server_default='PENDING')
     created_at = Column(DateTime(timezone=True), nullable=False, server_default=func.now())

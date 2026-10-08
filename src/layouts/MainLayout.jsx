@@ -146,7 +146,7 @@ export const MainLayout = ({ children }) => {
           }}
         >
           <span>OFFICIAL UNIVERSITY LABORATORY MANAGEMENT PORTAL</span>
-          <span>Academic Year 2026–2027</span>
+          <span>Academic Year {new Date().getFullYear()}–{new Date().getFullYear() + 1}</span>
         </div>
 
         {/* Main Header Bar */}

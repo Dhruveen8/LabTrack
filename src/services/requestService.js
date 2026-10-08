@@ -132,7 +132,8 @@ export const requestService = {
       purpose: data.purpose,
       coordinator_id: data.coordinatorId,
       due_date: new Date(data.returnDate).toISOString(),
-      unit_asset_ids: data.unitAssetIds
+      lab_id: Number(data.labId),
+      requested_items: data.items.map(item => ({ model_id: Number(item.modelId), quantity: Number(item.quantity) }))
     };
     const response = await apiClient.post('/borrowing/events/requests', payload);
     return response.data;
@@ -140,7 +141,7 @@ export const requestService = {
 
   getEventRequests: async () => (await apiClient.get('/borrowing/events/requests')).data,
 
-  approveEventRequest: async (id) => (await apiClient.post(`/borrowing/events/requests/${id}/approve`)).data,
+  approveEventRequest: async (id, unitAssetIds) => (await apiClient.post(`/borrowing/events/requests/${id}/approve`, { unit_asset_ids: unitAssetIds })).data,
 
   rejectEventRequest: async (id, reason) => (await apiClient.post(`/borrowing/events/requests/${id}/reject`, { reason })).data,
 };

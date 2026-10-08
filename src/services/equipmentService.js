@@ -17,7 +17,7 @@ export const equipmentService = {
       // Merge them into the format expected by the frontend
       return models.map(model => {
         const modelUnits = units.filter(u => u.model_id === model.id);
-        const availableCount = modelUnits.filter(u => u.status === 'AVAILABLE').length;
+        const availableCount = modelUnits.filter(u => u.status === 'AVAILABLE' && u.lab_id === model.lab_id).length;
         const borrowedCount = modelUnits.filter(u => u.status === 'ISSUED').length;
         const lab = labs.find(l => l.id === model.lab_id) || {};
 
@@ -35,6 +35,7 @@ export const equipmentService = {
           condition: 'Mixed',
           units: modelUnits.map(u => ({
             assetId: u.asset_id,
+            labId: u.lab_id,
             status: u.status === 'AVAILABLE' ? 'Available' : (u.status === 'ISSUED' ? 'Issued' : 'Maintenance'),
             condition: u.condition || 'Excellent',
             serialNumber: u.serial_number || u.asset_id,
