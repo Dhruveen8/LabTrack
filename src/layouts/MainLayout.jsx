@@ -174,36 +174,17 @@ export const MainLayout = ({ children }) => {
               {mobileMenuOpen ? <X size={22} /> : <Menu size={22} />}
             </button>
 
-            {/* University Crest Placeholder */}
-            <div
-              style={{
-                width: '36px',
-                height: '36px',
-                borderRadius: '50%',
-                backgroundColor: '#ffffff',
-                color: '#1e3a8a',
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-                fontWeight: 800,
-                fontSize: '1rem',
-                border: '2px solid #3b82f6',
-                boxShadow: '0 2px 4px rgba(0,0,0,0.2)'
-              }}
-            >
-              U
-            </div>
-
-            <div>
-              <Link to="/" style={{ textDecoration: 'none', color: '#ffffff' }}>
-                <div style={{ fontSize: '1.25rem', fontWeight: 800, letterSpacing: '0.05em', lineHeight: 1 }}>
-                  LABTRACK
+            <Link to="/" aria-label="LabTrack home" className="header-brand">
+              <img src="/labtrack-chip.svg" alt="" width="44" height="44" className="header-brand-icon" />
+              <div>
+                <div className="header-brand-name">
+                  LabTrack
                 </div>
-                <div style={{ fontSize: '0.7rem', color: '#93c5fd', fontWeight: 400, marginTop: '2px' }}>
+                <div className="header-brand-subtitle">
                   Smart Laboratory Equipment Management System
                 </div>
-              </Link>
-            </div>
+              </div>
+            </Link>
           </div>
 
           {/* Right Controls */}

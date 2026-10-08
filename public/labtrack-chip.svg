@@ -1,0 +1,20 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64">
+  <defs>
+    <mask id="route" maskUnits="userSpaceOnUse" x="0" y="0" width="64" height="64">
+      <rect width="64" height="64" fill="white"/>
+      <path d="M20 13V29Q20 34 25 34H46M32 34V49" fill="none" stroke="black" stroke-width="4"/>
+    </mask>
+  </defs>
+  <g fill="#ffffff" mask="url(#route)">
+    <rect x="10" y="10" width="44" height="44" rx="7"/>
+    <rect x="23" y="1" width="5" height="14" rx="2.5"/>
+    <rect x="36" y="1" width="5" height="14" rx="2.5"/>
+    <rect x="23" y="49" width="5" height="14" rx="2.5"/>
+    <rect x="36" y="49" width="5" height="14" rx="2.5"/>
+    <rect x="1" y="23" width="14" height="5" rx="2.5"/>
+    <rect x="1" y="36" width="14" height="5" rx="2.5"/>
+    <rect x="49" y="23" width="14" height="5" rx="2.5"/>
+    <rect x="49" y="36" width="14" height="5" rx="2.5"/>
+  </g>
+  <circle cx="46" cy="34" r="4.7" fill="#3b82f6"/>
+</svg>
