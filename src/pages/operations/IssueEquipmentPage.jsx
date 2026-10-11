@@ -3,6 +3,7 @@ import React, { useState, useEffect } from 'react';
 import { PageHeader } from '../../components/common/PageHeader';
 import { BarcodeScanner } from '../../components/scanner/BarcodeScanner';
 import apiClient from '../../api/client';
+import { validateIssueLab } from '../../utils/issueValidation';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { UserCheck, CheckCircle2, AlertCircle, ShieldCheck, Zap } from 'lucide-react';
 
@@ -10,7 +11,7 @@ export const IssueEquipmentPage = () => {
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
   const { user } = useAuth();
-  const { equipmentList, requestsList, issueEquipmentAction, refreshData } = useLabTrack();
+  const { equipmentList, requestsList, labsList, issueEquipmentAction, refreshData } = useLabTrack();
 
   const [step, setStep] = useState(1);
 
@@ -30,7 +31,7 @@ export const IssueEquipmentPage = () => {
 
   // Assistant's assigned labs
   const assignedLabIds = user?.assignedLabIds || [];
-  const isAllLabs = user?.role === 'admin' || assignedLabIds.length === 0;
+  const isAllLabs = user?.role === 'admin';
 
   // Auto-Issue from Manage Requests Page
   useEffect(() => {
@@ -90,6 +91,8 @@ export const IssueEquipmentPage = () => {
   // Step 2: Select the approved request to fulfill
   const handleSelectRequest = (req) => {
     setSelectedRequest(req);
+    setScannedUnit(null);
+    setWalkInModel(null);
     if (req === 'WALKIN') {
       setDueDate(new Date(Date.now() + 14 * 86400000).toISOString().split('T')[0]); // Default 14 days
     } else {
@@ -101,6 +104,8 @@ export const IssueEquipmentPage = () => {
   // Step 3: Handle scanning the physical equipment QR code on the item
   const handleScanEquipmentQR = async (qrCodeScanned) => {
     setScanError('');
+    setScannedUnit(null);
+    setWalkInModel(null);
     let cleanQR = (qrCodeScanned || '').trim();
 
     // FIX: Old QR sticker labels encoded full URLs (https://labtrack.univ.edu/equipment/LT-XXX-00001)
@@ -131,6 +136,12 @@ export const IssueEquipmentPage = () => {
         return;
       }
 
+      const labError = validateIssueLab(matchedUnit, selectedRequest, user, labsList);
+      if (labError) {
+        setScanError(labError);
+        return;
+      }
+
       if (selectedRequest !== 'WALKIN') {
         // Validate against requested model
         const targetEq = equipmentList.find(e => e.id === selectedRequest.equipmentId);
@@ -147,7 +158,7 @@ export const IssueEquipmentPage = () => {
       setScannedUnit({
         assetId: matchedUnit.asset_id,
         status: matchedUnit.status,
-        condition: matchedUnit.condition,
+        condition: matchedUnit.condition || 'Not recorded',
         serialNumber: matchedUnit.serial_number
       });
       setStep(3);
@@ -194,7 +205,9 @@ export const IssueEquipmentPage = () => {
       navigate('/transactions');
     } catch (error) {
       console.error('Issue equipment failed:', error);
-      alert('Failed to issue equipment: ' + (error.response?.data?.detail || error.message));
+      setScanError('Failed to issue equipment: ' + (error.response?.data?.detail || error.message));
+      setScannedUnit(null);
+      setStep(2);
     }
   };
 
@@ -373,7 +386,7 @@ export const IssueEquipmentPage = () => {
                 Confirm Physical Equipment Handover
               </h3>
               <p style={{ fontSize: '0.8rem', color: '#64748b', margin: '2px 0 0' }}>
-                All validation checks passed. Review details before recording checkout.
+                Scanned unit matches the requested model and lab and is available. Review details before recording checkout.
               </p>
             </div>
           </div>
@@ -404,11 +417,12 @@ export const IssueEquipmentPage = () => {
               type="date"
               className="form-control"
               value={dueDate}
+              disabled={selectedRequest?.kind === 'QUICK_BORROW'}
               onChange={(e) => setDueDate(e.target.value)}
               required
             />
             <small style={{ fontSize: '0.75rem', color: '#64748b' }}>
-              Ensure this matches the policy limit (14 days for students).
+              {selectedRequest?.kind === 'QUICK_BORROW' ? 'Quick Borrow: return by 11:59 PM on the borrowing day. The deadline is fixed.' : 'Ensure this matches the policy limit (14 days for students).'}
             </small>
           </div>
 

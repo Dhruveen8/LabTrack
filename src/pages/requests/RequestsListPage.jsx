@@ -68,6 +68,7 @@ export const RequestsListPage = () => {
       cell: (row) => (
         <div>
           <div style={{ fontWeight: 600, color: '#0f172a' }}>{row.equipmentName}</div>
+          {row.kind === 'QUICK_BORROW' && <span className="badge badge-warning">Quick Borrow · Same-day return</span>}
           <div style={{ fontSize: '0.75rem', color: '#64748b' }}>{row.labName} (Qty: {row.quantity || 1})</div>
         </div>
       )
@@ -183,7 +184,7 @@ export const RequestsListPage = () => {
           )}
 
           {/* Borrower action: request extension if already issued */}
-          {(user?.role === 'student' || user?.role === 'faculty') && row.status === 'Issued' && (
+          {(user?.role === 'student' || user?.role === 'faculty') && row.status === 'Issued' && row.kind !== 'QUICK_BORROW' && (
             <Link to={`/extend-request/${row.id}`} className="btn btn-secondary btn-sm">
               <RefreshCw size={13} /> Request Extension
             </Link>

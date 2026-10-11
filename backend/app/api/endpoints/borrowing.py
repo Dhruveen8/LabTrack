@@ -38,6 +38,14 @@ from app.api.endpoints.notifications import create_notification
 router = APIRouter()
 
 
+def quick_borrow_deadline(required_from, role):
+    if role != RoleEnum.FACULTY:
+        raise HTTPException(status_code=403, detail="Quick Borrow is only available to faculty")
+    local_timezone = timezone(timedelta(hours=5, minutes=30))
+    start = required_from if required_from.tzinfo else required_from.replace(tzinfo=timezone.utc)
+    return start.astimezone(local_timezone).replace(hour=23, minute=59, second=59, microsecond=0).astimezone(timezone.utc)
+
+
 async def named_responses(db, records, schema, id_field, name_field, role_field):
     """Enrich only records already selected by the caller's access scope."""
     ids = {getattr(record, id_field) for record in records}
@@ -60,12 +68,16 @@ async def create_request(
     if current_user.role not in [RoleEnum.STUDENT, RoleEnum.FACULTY]:
         raise HTTPException(status_code=403, detail="Only students and faculty can make reservations")
 
-    if req_in.kind not in (None, RequestKindEnum.STANDARD):
+    if req_in.kind not in (None, RequestKindEnum.STANDARD, RequestKindEnum.QUICK_BORROW):
         raise HTTPException(status_code=400, detail='Use the counter or event issue workflow for this request kind')
 
     # Normalize before comparing: date-only and timestamp inputs can be mixed.
     req_from = req_in.required_from if req_in.required_from.tzinfo else req_in.required_from.replace(tzinfo=timezone.utc)
     req_until = req_in.required_until if req_in.required_until.tzinfo else req_in.required_until.replace(tzinfo=timezone.utc)
+    if req_in.kind == RequestKindEnum.QUICK_BORROW:
+        req_until = quick_borrow_deadline(req_from, current_user.role)
+        if req_until <= datetime.now(timezone.utc):
+            raise HTTPException(status_code=400, detail="The Quick Borrow date has already ended")
     if req_until <= req_from:
         raise HTTPException(status_code=400, detail="required_until must be after required_from")
 
@@ -288,6 +300,9 @@ async def request_extension(
     if req.requester_id != current_user.id:
         raise HTTPException(status_code=403, detail="Not your request")
 
+    if req.kind == RequestKindEnum.QUICK_BORROW:
+        raise HTTPException(status_code=400, detail="Quick Borrow must be returned the same day and cannot be extended")
+
     if req.status != RequestStatusEnum.ISSUED:
         raise HTTPException(status_code=400, detail="Can only extend issued requests")
 
@@ -400,6 +415,14 @@ async def checkout_equipment(
     if not req or req.status != RequestStatusEnum.APPROVED:
         raise HTTPException(status_code=400, detail="Invalid request or request not approved")
 
+    if req.kind == RequestKindEnum.QUICK_BORROW:
+        deadline = quick_borrow_deadline(req.required_from, RoleEnum.FACULTY)
+        if datetime.now(timezone.utc) < deadline - timedelta(hours=23, minutes=59, seconds=59):
+            raise HTTPException(status_code=400, detail="Quick Borrow can only be issued on the selected borrowing day")
+        if datetime.now(timezone.utc) >= deadline:
+            raise HTTPException(status_code=400, detail="This Quick Borrow request has expired. Ask the faculty member to submit a new request.")
+        req.required_until = deadline
+
     lab_ids = await get_assistant_labs(db, current_user.id)
     if req.lab_id not in lab_ids:
         raise HTTPException(status_code=403, detail="Not authorized for this lab")
@@ -440,7 +463,8 @@ async def checkout_equipment(
         borrower_id=req.requester_id,
         lab_id=req.lab_id,
         due_date=req.required_until,
-        status=TransactionStatusEnum.ACTIVE
+        status=TransactionStatusEnum.ACTIVE,
+        is_quick_borrow=req.kind == RequestKindEnum.QUICK_BORROW
     )
 
     db.add(transaction)

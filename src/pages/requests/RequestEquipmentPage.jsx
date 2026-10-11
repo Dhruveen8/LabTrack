@@ -5,7 +5,7 @@ import { PageHeader } from '../../components/common/PageHeader';
 import { useNavigate } from 'react-router-dom';
 import { Send, Clock, AlertCircle, Calendar } from 'lucide-react';
 
-export const RequestEquipmentPage = () => {
+export const RequestEquipmentPage = ({ quickBorrow = false }) => {
   const navigate = useNavigate();
   const { user } = useAuth();
   const { equipmentList, createRequestAction, systemSettings } = useLabTrack();
@@ -18,13 +18,13 @@ export const RequestEquipmentPage = () => {
     ? (systemSettings?.facultyBorrowLimitDays || 30)
     : (systemSettings?.studentBorrowLimitDays || 14);
 
-  const todayStr = new Date().toISOString().split('T')[0];
+  const todayStr = new Date().toLocaleDateString('en-CA', { timeZone: 'Asia/Kolkata' });
   const defaultEndStr = new Date(Date.now() + Math.min(maxDays, isFaculty ? 14 : 7) * 86400000).toISOString().split('T')[0];
 
   const [selectedEqId, setSelectedEqId] = useState(equipmentList[0]?.id || 'EQ-1001');
   const [qty, setQty] = useState(1);
   const [fromDate, setFromDate] = useState(todayStr);
-  const [untilDate, setUntilDate] = useState(defaultEndStr);
+  const [untilDate, setUntilDate] = useState(quickBorrow ? todayStr : defaultEndStr);
   const [purpose, setPurpose] = useState('Academic Coursework / Capstone Project');
   const [errorMsg, setErrorMsg] = useState('');
 
@@ -37,7 +37,7 @@ export const RequestEquipmentPage = () => {
   const diffTime = endD.getTime() - startD.getTime();
   const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
 
-  const isDurationValid = diffDays >= 1 && diffDays <= maxDays;
+  const isDurationValid = quickBorrow ? !!fromDate : diffDays >= 1 && diffDays <= maxDays;
 
   // Max selectable date based on dynamic limit
   const maxAllowedDate = new Date(startD.getTime() + maxDays * 86400000).toISOString().split('T')[0];
@@ -46,12 +46,12 @@ export const RequestEquipmentPage = () => {
     e.preventDefault();
     setErrorMsg('');
 
-    if (diffDays < 1) {
+    if (!quickBorrow && diffDays < 1) {
       setErrorMsg('Return date must be after the required start date.');
       return;
     }
 
-    if (diffDays > maxDays) {
+    if (!quickBorrow && diffDays > maxDays) {
       setErrorMsg(`Exceeded maximum borrowing limit! ${isFaculty ? 'Faculty' : 'Students'} are currently configured for a maximum of ${maxDays} days per checkout (${diffDays} days selected).`);
       return;
     }
@@ -67,8 +67,9 @@ export const RequestEquipmentPage = () => {
         labId: selectedEq.labId,
         labName: selectedEq.labName,
         quantity: qty,
-        requiredFrom: fromDate,
-        requiredUntil: untilDate,
+        requiredFrom: quickBorrow ? `${fromDate}T00:00:00+05:30` : fromDate,
+        requiredUntil: quickBorrow ? `${fromDate}T23:59:59+05:30` : untilDate,
+        kind: quickBorrow ? 'QUICK_BORROW' : 'STANDARD',
         purpose
       });
       navigate('/requests');
@@ -81,8 +82,8 @@ export const RequestEquipmentPage = () => {
   return (
     <div>
       <PageHeader
-        title="Submit Equipment Reservation Request"
-        subtitle={`Apply for lab asset checkout. Institutional limit: ${maxDays} days max for ${isFaculty ? 'faculty' : 'students'}.`}
+        title={quickBorrow ? 'Quick Borrow Request' : 'Submit Equipment Reservation Request'}
+        subtitle={quickBorrow ? 'Request equipment for one day. The lab assistant reviews and issues it; return it by the end of that day.' : `Apply for lab asset checkout. Institutional limit: ${maxDays} days max for ${isFaculty ? 'faculty' : 'students'}.`}
       />
 
       <div className="portal-card" style={{ maxWidth: '700px' }}>
@@ -102,7 +103,7 @@ export const RequestEquipmentPage = () => {
           <Calendar size={20} color="#1d4ed8" />
           <div style={{ fontSize: '0.85rem', color: '#1e3a8a' }}>
             <strong>Institutional Checkout Policy: </strong>
-            Logged in as <strong>{user?.name}</strong> ({userRole}). Your maximum configured borrowing period is <strong>{maxDays} days</strong>. If you need it longer, you can submit a digital extension from the portal later without re-scanning.
+            {quickBorrow ? 'Faculty only. Assistant approval is required, and equipment must be returned by 11:59 PM on the selected borrowing day. Extensions are not available.' : <>Logged in as <strong>{user?.name}</strong> ({userRole}). Your maximum configured borrowing period is <strong>{maxDays} days</strong>. If you need it longer, you can submit a digital extension from the portal later without re-scanning.</>}
           </div>
         </div>
 
@@ -153,11 +154,12 @@ export const RequestEquipmentPage = () => {
               />
             </div>
             <div className="form-group">
-              <label className="form-label">Required Until Date (Max: {formatDate(maxAllowedDate)})</label>
+              <label className="form-label">{quickBorrow ? 'Return Date (same day, 11:59 PM)' : `Required Until Date (Max: ${formatDate(maxAllowedDate)})`}</label>
               <input
                 type="date"
                 className="form-control"
-                value={untilDate}
+                value={quickBorrow ? fromDate : untilDate}
+                disabled={quickBorrow}
                 min={fromDate}
                 max={maxAllowedDate}
                 onChange={(e) => setUntilDate(e.target.value)}
@@ -169,7 +171,7 @@ export const RequestEquipmentPage = () => {
           {/* Duration Indicator */}
           <div style={{ marginBottom: '1rem', display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '0.5rem 0.75rem', backgroundColor: isDurationValid ? '#f0fdf4' : '#fef2f2', borderRadius: '6px', border: `1px solid ${isDurationValid ? '#bbf7d0' : '#fecaca'}` }}>
             <span style={{ fontSize: '0.8rem', color: isDurationValid ? '#166534' : '#991b1b', fontWeight: 600 }}>
-              Requested Duration: <strong>{isNaN(diffDays) ? 0 : diffDays} day{diffDays === 1 ? '' : 's'}</strong> (Configured Max: {maxDays} days)
+              {quickBorrow ? 'Requested Duration: Same day only' : <>Requested Duration: <strong>{isNaN(diffDays) ? 0 : diffDays} day{diffDays === 1 ? '' : 's'}</strong> (Configured Max: {maxDays} days)</>}
             </span>
             {!isDurationValid && (
               <span style={{ fontSize: '0.75rem', color: '#dc2626', fontWeight: 700 }}>

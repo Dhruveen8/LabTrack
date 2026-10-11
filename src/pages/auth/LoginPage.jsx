@@ -67,28 +67,14 @@ export const LoginPage = () => {
     >
       {/* Official Top Institutional Banner */}
       <div style={{ textAlign: 'center', marginBottom: '1.5rem' }}>
-        <div
-          style={{
-            width: '64px',
-            height: '64px',
-            borderRadius: '50%',
-            backgroundColor: '#1e3a8a',
-            color: '#ffffff',
-            display: 'inline-flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            fontWeight: 800,
-            fontSize: '1.75rem',
-            border: '3px solid #3b82f6',
-            boxShadow: '0 4px 6px -1px rgba(0,0,0,0.1)',
-            marginBottom: '0.75rem'
-          }}
-        >
-          U
-        </div>
-        <h1 style={{ fontSize: '1.75rem', fontWeight: 800, color: '#0f172a', letterSpacing: '0.05em', margin: 0 }}>
-          LABTRACK
-        </h1>
+        <img
+          src="/labtrack-chip.svg"
+          alt=""
+          width="72"
+          height="72"
+          className="auth-brand-icon"
+        />
+        <h1 className="auth-brand-name">LabTrack</h1>
         <p style={{ fontSize: '0.875rem', color: '#64748b', fontWeight: 500, marginTop: '0.25rem' }}>
           Smart Laboratory Equipment Management System
         </p>

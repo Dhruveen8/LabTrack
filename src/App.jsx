@@ -23,7 +23,6 @@ import { IssueEquipmentPage } from './pages/operations/IssueEquipmentPage';
 import { ReturnEquipmentPage } from './pages/operations/ReturnEquipmentPage';
 import { EventIssuePage } from './pages/operations/EventIssuePage';
 import { BulkImportPage } from './pages/operations/BulkImportPage';
-import { QuickBorrowPage } from './pages/operations/QuickBorrowPage';
 
 import { LabsListPage } from './pages/labs/LabsListPage';
 import { RequestsListPage } from './pages/requests/RequestsListPage';
@@ -106,7 +105,7 @@ export function App() {
               <Route path="/return-equipment" element={<ProtectedRoute allowedRoles={['assistant']}><ReturnEquipmentPage /></ProtectedRoute>} />
               <Route path="/event-issue" element={<ProtectedRoute allowedRoles={['admin', 'assistant', 'faculty']}><EventIssuePage /></ProtectedRoute>} />
               <Route path="/bulk-import" element={<ProtectedRoute allowedRoles={['admin', 'assistant']}><BulkImportPage /></ProtectedRoute>} />
-              <Route path="/quick-borrow" element={<ProtectedRoute allowedRoles={['assistant']}><QuickBorrowPage /></ProtectedRoute>} />
+              <Route path="/quick-borrow" element={<ProtectedRoute allowedRoles={['faculty']}><RequestEquipmentPage quickBorrow /></ProtectedRoute>} />
 
               {/* Labs & Management */}
               <Route path="/labs" element={<ProtectedRoute allowedRoles={['admin', 'assistant', 'faculty', 'student']}><LabsListPage /></ProtectedRoute>} />

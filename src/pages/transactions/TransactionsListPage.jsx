@@ -86,7 +86,7 @@ export const TransactionsListPage = () => {
       cell: (row) => (
         <div style={{ display: 'flex', gap: '0.35rem' }}>
           {/* Extension action for borrower if item is active */}
-          {isStudentOrFaculty && (row.status === 'Issued' || row.status === 'Overdue') && (
+          {isStudentOrFaculty && !row.isQuickBorrow && (row.status === 'Issued' || row.status === 'Overdue') && (
             <Link to={`/extend-request/${row.id}`} className="btn btn-secondary btn-sm">
               <RefreshCw size={13} /> Extend
             </Link>

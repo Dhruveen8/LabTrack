@@ -62,7 +62,7 @@ export const FacultyDashboard = () => {
             <CalendarCheck size={16} /> Event / Club Bulk Request
           </Link>
           <Link to="/quick-borrow" className="btn btn-secondary">
-            <Zap size={16} /> Quick Borrow Counter
+            <Zap size={16} /> Quick Borrow
           </Link>
         </div>
       </div>
