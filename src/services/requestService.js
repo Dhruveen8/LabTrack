@@ -1,3 +1,4 @@
+import { requestHasLab, requestHasStage } from '../utils/cart';
 import apiClient from '../api/client';
 
 export const requestService = {
@@ -11,6 +12,9 @@ export const requestService = {
         requesterName: req.requester_name,
         requesterRole: req.requester_role?.toLowerCase(),
         equipmentId: req.model_id,
+        items: req.items || [],
+        equipmentName: req.items?.length ? req.items.map(item => `${item.equipment_name} × ${item.quantity}`).join(', ') : undefined,
+        labName: req.items?.length ? [...new Set(req.items.map(item => item.lab_name))].join(', ') : undefined,
         labId: req.lab_id,
         requestDate: req.required_from,
         requiredFrom: req.required_from,
@@ -38,14 +42,14 @@ export const requestService = {
 
   getByLab: async (labId) => {
     const all = await requestService.getAllRequests();
-    return all.filter(req => req.labId === parseInt(labId) || req.labId === labId);
+    return all.filter(req => requestHasLab(req, [Number(labId)]));
   },
 
   getApprovedByBorrower: async (borrowerId) => {
     const all = await requestService.getAllRequests();
     return all.filter(
       req => (req.requesterId === parseInt(borrowerId) || req.requesterId === borrowerId) &&
-             req.status === 'Approved'
+             requestHasStage(req, 'APPROVED')
     );
   },
 

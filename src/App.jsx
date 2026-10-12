@@ -3,6 +3,8 @@ import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-d
 import { AuthProvider } from './context/AuthContext';
 import { useAuth } from './context/hooks';
 import { ToastProvider } from './context/ToastContext';
+import { CartProvider } from './context/CartContext';
+import { CartPage } from './pages/requests/CartPage';
 import { LabTrackProvider } from './context/LabTrackContext';
 import { MainLayout } from './layouts/MainLayout';
 
@@ -78,6 +80,7 @@ export function App() {
   return (
     <ToastProvider>
       <AuthProvider>
+        <CartProvider>
         <LabTrackProvider>
           <Router>
             <Routes>
@@ -110,6 +113,7 @@ export function App() {
               {/* Labs & Management */}
               <Route path="/labs" element={<ProtectedRoute allowedRoles={['admin', 'assistant', 'faculty', 'student']}><LabsListPage /></ProtectedRoute>} />
               <Route path="/requests" element={<ProtectedRoute allowedRoles={['admin', 'assistant', 'faculty', 'student']}><RequestsListPage /></ProtectedRoute>} />
+              <Route path="/cart" element={<ProtectedRoute allowedRoles={['student']}><CartPage /></ProtectedRoute>} />
               <Route path="/request-equipment" element={<ProtectedRoute allowedRoles={['admin', 'assistant', 'faculty', 'student']}><RequestEquipmentPage /></ProtectedRoute>} />
               <Route path="/extend-request/:transactionId" element={<ProtectedRoute allowedRoles={['admin', 'assistant', 'faculty', 'student']}><ExtendRequestPage /></ProtectedRoute>} />
               <Route path="/inter-lab-transfers" element={<ProtectedRoute allowedRoles={['admin', 'assistant', 'faculty']}><InterLabTransfersPage /></ProtectedRoute>} />
@@ -130,6 +134,7 @@ export function App() {
             </Routes>
           </Router>
         </LabTrackProvider>
+        </CartProvider>
       </AuthProvider>
     </ToastProvider>
   );

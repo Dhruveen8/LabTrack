@@ -145,7 +145,7 @@ async def update_transfer_status(
     current_user: User = Depends(get_current_user)
 ):
     """Admin approves/rejects, or receiving lab assistant completes."""
-    result = await db.execute(select(Transfer).where(Transfer.id == transfer_id))
+    result = await db.execute(select(Transfer).where(Transfer.id == transfer_id).with_for_update())
     transfer = result.scalars().first()
     if not transfer:
         raise HTTPException(status_code=404, detail="Transfer not found")
@@ -169,7 +169,7 @@ async def update_transfer_status(
     transfer_units = tu_result.scalars().all()
     asset_ids = [tu.unit_asset_id for tu in transfer_units]
 
-    units_res = await db.execute(select(EquipmentUnit).where(EquipmentUnit.asset_id.in_(asset_ids)))
+    units_res = await db.execute(select(EquipmentUnit).where(EquipmentUnit.asset_id.in_(asset_ids)).order_by(EquipmentUnit.asset_id).with_for_update())
     units = {u.asset_id: u for u in units_res.scalars().all()}
 
     # State transitions

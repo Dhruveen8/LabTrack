@@ -1,5 +1,5 @@
 import { useContext } from 'react';
-import { AuthContext, LabTrackContext, ToastContext } from './contextDefinitions';
+import { AuthContext, LabTrackContext, ToastContext, CartContext } from './contextDefinitions';
 
 export const useAuth = () => {
   const context = useContext(AuthContext);
@@ -16,5 +16,11 @@ export const useLabTrack = () => {
 export const useToast = () => {
   const context = useContext(ToastContext);
   if (!context) throw new Error('useToast must be used within a ToastProvider');
+  return context;
+};
+
+export const useCart = () => {
+  const context = useContext(CartContext);
+  if (!context) throw new Error('useCart must be used within a CartProvider');
   return context;
 };

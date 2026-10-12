@@ -36,7 +36,7 @@ export const equipmentService = {
           units: modelUnits.map(u => ({
             assetId: u.asset_id,
             labId: u.lab_id,
-            status: u.status === 'AVAILABLE' ? 'Available' : (u.status === 'ISSUED' ? 'Issued' : 'Maintenance'),
+            status: u.status === 'AVAILABLE' ? 'Available' : (u.status === 'ISSUED' ? 'Issued' : u.status === 'RESERVED' ? 'Reserved' : u.status === 'IN_TRANSIT' ? 'In Transit' : 'Maintenance'),
             condition: u.condition || 'Excellent',
             serialNumber: u.serial_number || u.asset_id,
             qrCodeUrl: u.qr_code_url

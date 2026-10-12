@@ -437,7 +437,9 @@ export const LabTrackProvider = ({ children }) => {
     const updated = await requestService.updateRequestStatus(id, status);
     await refreshData();
     if (status === 'Approved') {
-      addToast(`Request ${id} approved! Ready for borrower physical pickup & QR scan.`, 'success');
+      addToast(updated.status === 'PENDING'
+        ? `Your lab items in request ${id} are approved for pickup. Other labs still have pending items.`
+        : `Request ${id} approved! Ready for borrower physical pickup & QR scan.`, 'success');
     } else {
       addToast(`Request ${id} marked as ${status}`, 'info');
     }

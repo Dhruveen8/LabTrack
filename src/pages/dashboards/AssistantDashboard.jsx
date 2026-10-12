@@ -1,5 +1,6 @@
 import { useLabTrack, useAuth } from '../../context/hooks';
 import React from 'react';
+import { requestHasLab, requestHasStage } from '../../utils/cart';
 import { PageHeader } from '../../components/common/PageHeader';
 import { StatCard } from '../../components/common/StatCard';
 import { DataTable } from '../../components/common/DataTable';
@@ -24,14 +25,14 @@ export const AssistantDashboard = () => {
     : transactionsList;
 
   const myRequests = assignedLabIds.length > 0
-    ? requestsList.filter(r => assignedLabIds.includes(r.labId))
+    ? requestsList.filter(r => requestHasLab(r, assignedLabIds))
     : requestsList;
 
   const available = myEquipment.reduce((acc, item) => acc + (parseInt(item.availableQuantity, 10) || 0), 0);
   const borrowed = myEquipment.reduce((acc, item) => acc + (parseInt(item.borrowedQuantity, 10) || 0), 0);
   const overdue = myTransactions.filter(t => t.status === 'Overdue').length;
-  const pendingRequests = myRequests.filter(r => r.status === 'Pending').length;
-  const readyPickupRequests = myRequests.filter(r => r.status === 'Approved').length;
+  const pendingRequests = myRequests.filter(r => requestHasStage(r, 'PENDING', assignedLabIds)).length;
+  const readyPickupRequests = myRequests.filter(r => requestHasStage(r, 'APPROVED', assignedLabIds)).length;
 
   const columns = [
     {
@@ -125,6 +126,13 @@ export const AssistantDashboard = () => {
         <StatCard title="Overdue Items" value={overdue} icon={AlertTriangle} color="danger" />
       </div>
 
+      <div className="portal-card">
+        <div className="portal-header"><div className="portal-title">Combined Equipment Requests</div><div className="portal-subtitle">Review your lab’s items in each request before physical pickup</div></div>
+        {myRequests.filter(request => requestHasStage(request, 'PENDING', assignedLabIds) || requestHasStage(request, 'APPROVED', assignedLabIds)).slice(0, 6).map(request => <div key={request.id} style={{ padding: '1rem 0', borderBottom: '1px solid #e2e8f0' }}>
+          <Link to="/requests"><strong>Request #{request.id} · {request.requesterName}</strong></Link>
+          {request.items?.length ? request.items.filter(item => assignedLabIds.includes(item.lab_id)).map(item => <div key={item.id}>{item.equipment_name} × {item.quantity} — {item.lab_name} ({item.status})</div>) : <div>{request.equipmentName} × {request.quantity}</div>}
+        </div>)}
+      </div>
       {/* Desk Recent Activity Table */}
       <div className="portal-card">
         <div className="portal-header">

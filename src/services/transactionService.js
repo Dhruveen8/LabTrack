@@ -14,6 +14,10 @@ export const transactionService = {
         return {
           id: txn.id,
           requestId: txn.request_id,
+          requestItemId: txn.request_item_id,
+          equipmentId: txn.model_id,
+          equipmentName: txn.equipment_name,
+          originLab: txn.lab_name,
           unitAssetId: txn.unit_asset_id,
           borrowerId: txn.borrower_id,
           borrowerName: txn.borrower_name,

@@ -1,8 +1,9 @@
 import { useLabTrack, useAuth } from '../../context/hooks';
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { PageHeader } from '../../components/common/PageHeader';
 import { BarcodeScanner } from '../../components/scanner/BarcodeScanner';
 import apiClient from '../../api/client';
+import { requestHasLab, requestHasStage, matchingRequestItem } from '../../utils/cart';
 import { validateIssueLab } from '../../utils/issueValidation';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { UserCheck, CheckCircle2, AlertCircle, ShieldCheck, Zap } from 'lucide-react';
@@ -14,6 +15,7 @@ export const IssueEquipmentPage = () => {
   const { equipmentList, requestsList, labsList, issueEquipmentAction, refreshData } = useLabTrack();
 
   const [step, setStep] = useState(1);
+  const [issuing, setIssuing] = useState(false);
 
   // Borrower details
   const [borrowerId, setBorrowerId] = useState(''); // Just the string ID for display
@@ -30,7 +32,7 @@ export const IssueEquipmentPage = () => {
   const [dueDate, setDueDate] = useState('');
 
   // Assistant's assigned labs
-  const assignedLabIds = user?.assignedLabIds || [];
+  const assignedLabIds = useMemo(() => user?.assignedLabIds || [], [user]);
   const isAllLabs = user?.role === 'admin';
 
   // Auto-Issue from Manage Requests Page
@@ -38,7 +40,7 @@ export const IssueEquipmentPage = () => {
     const autoRequestId = searchParams.get('autoRequestId');
     if (autoRequestId && requestsList.length > 0) {
       const req = requestsList.find(r => r.id === parseInt(autoRequestId));
-      if (req) {
+      if (req && requestHasStage(req, 'APPROVED', assignedLabIds)) {
         setBorrowerId(`User ID: ${req.requesterId}`);
         setBorrowerUserId(req.requesterId);
         setBorrowerApprovedRequests([req]);
@@ -47,7 +49,17 @@ export const IssueEquipmentPage = () => {
         setStep(2);
       }
     }
-  }, [searchParams, requestsList]);
+  }, [searchParams, requestsList, assignedLabIds]);
+
+  useEffect(() => {
+    if (borrowerUserId) setBorrowerApprovedRequests(requestsList.filter(request =>
+      request.requesterId === borrowerUserId && requestHasStage(request, 'APPROVED', assignedLabIds)));
+    if (selectedRequest && selectedRequest !== 'WALKIN') {
+      const latest = requestsList.find(request => request.id === selectedRequest.id);
+      if (latest && !requestHasStage(latest, 'APPROVED', assignedLabIds)) setSelectedRequest(null);
+      else if (latest && latest !== selectedRequest) setSelectedRequest(latest);
+    }
+  }, [requestsList, selectedRequest, borrowerUserId, assignedLabIds]);
 
   // Step 1: Handle scanning borrower's university ID card
   const handleScanBorrower = async (code) => {
@@ -74,8 +86,8 @@ export const IssueEquipmentPage = () => {
       // Find APPROVED requests for this borrower in assistant's assigned labs
       const approved = requestsList.filter(req => {
         const matchBorrower = req.requesterId === resolvedUserId;
-        const matchStatus = req.status === 'Approved';
-        const matchLab = isAllLabs || assignedLabIds.includes(req.labId);
+        const matchStatus = requestHasStage(req, 'APPROVED', assignedLabIds);
+        const matchLab = isAllLabs || requestHasLab(req, assignedLabIds);
         return matchBorrower && matchStatus && matchLab;
       });
 
@@ -131,7 +143,8 @@ export const IssueEquipmentPage = () => {
       const matchedUnit = response.data;
       const parentEquipment = equipmentList.find(e => e.id === matchedUnit.model_id);
 
-      if (matchedUnit.status !== 'AVAILABLE') {
+      const allocatedItem = selectedRequest !== 'WALKIN' ? matchingRequestItem(selectedRequest, matchedUnit) : null;
+      if (matchedUnit.status !== 'AVAILABLE' && !(matchedUnit.status === 'RESERVED' && allocatedItem)) {
         setScanError(`Unit ${matchedUnit.asset_id} is currently marked as "${matchedUnit.status}". Please choose an available unit.`);
         return;
       }
@@ -142,7 +155,9 @@ export const IssueEquipmentPage = () => {
         return;
       }
 
-      if (selectedRequest !== 'WALKIN') {
+      if (selectedRequest !== 'WALKIN' && selectedRequest.items?.length) {
+        if (!allocatedItem) { setScanError('Scan one of the reserved assets for an approved item in this request.'); return; }
+      } else if (selectedRequest !== 'WALKIN') {
         // Validate against requested model
         const targetEq = equipmentList.find(e => e.id === selectedRequest.equipmentId);
         if (!parentEquipment || parentEquipment.id !== targetEq?.id) {
@@ -157,6 +172,9 @@ export const IssueEquipmentPage = () => {
       // Unit is valid and available!
       setScannedUnit({
         assetId: matchedUnit.asset_id,
+        modelId: matchedUnit.model_id,
+        modelName: parentEquipment?.name,
+        labId: matchedUnit.lab_id,
         status: matchedUnit.status,
         condition: matchedUnit.condition || 'Not recorded',
         serialNumber: matchedUnit.serial_number
@@ -173,7 +191,8 @@ export const IssueEquipmentPage = () => {
 
   // Confirm Handover
   const handleConfirmIssue = async () => {
-    if (!selectedRequest || !scannedUnit) return;
+    if (!selectedRequest || !scannedUnit || issuing) return;
+    setIssuing(true);
 
     try {
       if (selectedRequest === 'WALKIN') {
@@ -202,13 +221,13 @@ export const IssueEquipmentPage = () => {
         });
       }
 
-      navigate('/transactions');
+      if (selectedRequest !== 'WALKIN' && selectedRequest.items?.length) { setScannedUnit(null); setStep(2); } else navigate('/transactions');
     } catch (error) {
       console.error('Issue equipment failed:', error);
       setScanError('Failed to issue equipment: ' + (error.response?.data?.detail || error.message));
       setScannedUnit(null);
       setStep(2);
-    }
+    } finally { setIssuing(false); }
   };
 
   const resetFlow = () => {
@@ -316,6 +335,7 @@ export const IssueEquipmentPage = () => {
                       </div>
                       <div style={{ fontSize: '1rem', fontWeight: 700, color: '#0f172a', marginTop: '4px' }}>
                         {req.equipmentName} (Qty: {req.quantity || 1})
+                        {req.items?.filter(item => assignedLabIds.includes(item.lab_id)).map(item => <div key={item.id} style={{ fontSize: '.8rem', fontWeight: 400, marginTop: '.3rem' }}>{item.equipment_name} × {item.quantity} — {item.status}. Reserved assets: {item.reserved_asset_ids.join(', ') || 'None remaining'}</div>)}
                       </div>
                     </div>
                     <div>
@@ -400,7 +420,7 @@ export const IssueEquipmentPage = () => {
             <div>
               <div style={{ fontSize: '0.75rem', color: '#64748b', fontWeight: 600 }}>EQUIPMENT MODEL</div>
               <div style={{ fontSize: '0.95rem', fontWeight: 700, color: '#0f172a' }}>
-                {selectedRequest === 'WALKIN' ? walkInModel?.name : selectedRequest.equipmentName}
+                {scannedUnit.modelName || (selectedRequest === 'WALKIN' ? walkInModel?.name : selectedRequest.equipmentName)}
               </div>
             </div>
 
@@ -417,7 +437,7 @@ export const IssueEquipmentPage = () => {
               type="date"
               className="form-control"
               value={dueDate}
-              disabled={selectedRequest?.kind === 'QUICK_BORROW'}
+              disabled={selectedRequest !== 'WALKIN'}
               onChange={(e) => setDueDate(e.target.value)}
               required
             />
@@ -427,7 +447,7 @@ export const IssueEquipmentPage = () => {
           </div>
 
           <div style={{ display: 'flex', gap: '0.75rem', marginTop: '1.5rem' }}>
-            <button className="btn btn-primary" onClick={handleConfirmIssue} style={{ flex: 1 }}>
+            <button className="btn btn-primary" disabled={issuing} onClick={handleConfirmIssue} style={{ flex: 1 }}>
               <CheckCircle2 size={16} /> Complete Physical Handover
             </button>
             <button className="btn btn-secondary" onClick={() => setStep(2)}>

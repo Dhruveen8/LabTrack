@@ -33,6 +33,7 @@ class AccountStatusEnum(str, enum.Enum):
 
 class UnitStatusEnum(str, enum.Enum):
     AVAILABLE = "AVAILABLE"
+    RESERVED = "RESERVED"    # allocated to a submitted request, not to a cart
     ISSUED = "ISSUED"
     MAINTENANCE = "MAINTENANCE"
     IN_TRANSIT = "IN_TRANSIT"    # reserved by an approved inter-lab transfer
@@ -260,6 +261,7 @@ class Request(Base):
     decided_at = Column(DateTime(timezone=True), nullable=True)
     event_issue_id = Column(Integer, ForeignKey("event_issues.id", ondelete="RESTRICT"), nullable=True)
     created_at = Column(DateTime(timezone=True), nullable=False, server_default=func.now())
+    submission_key = Column(String(36), nullable=True, unique=True)
 
     __table_args__ = (
         CheckConstraint("quantity > 0", name="ck_requests_quantity_positive"),
@@ -269,6 +271,35 @@ class Request(Base):
         Index("ix_requests_requester_status", "requester_id", "status"),
         Index("ix_requests_lab_status", "lab_id", "status"),
     )
+
+
+class RequestItem(Base):
+    """Items belonging to one existing Request, including per-lab decisions."""
+    __tablename__ = 'request_items'
+    id = Column(Integer, primary_key=True)
+    request_id = Column(Integer, ForeignKey('requests.id', ondelete='CASCADE'), nullable=False, index=True)
+    model_id = Column(Integer, ForeignKey('equipment_models.id', ondelete='RESTRICT'), nullable=False)
+    lab_id = Column(Integer, ForeignKey('labs.id', ondelete='RESTRICT'), nullable=False)
+    quantity = Column(Integer, nullable=False)
+    status = Column(_enum(RequestStatusEnum, 'requeststatusenum'), nullable=False, server_default='PENDING')
+    __table_args__ = (UniqueConstraint('request_id', 'model_id', 'lab_id', name='uq_request_item_model_lab'),
+                     CheckConstraint('quantity > 0', name='ck_request_item_quantity'),)
+
+
+class RequestAllocation(Base):
+    """One submitted request can hold a physical unit until issue/rejection."""
+    __tablename__ = 'request_allocations'
+    asset_id = Column(String, ForeignKey('equipment_units.asset_id', ondelete='RESTRICT'), primary_key=True)
+    request_item_id = Column(Integer, ForeignKey('request_items.id', ondelete='CASCADE'), nullable=False, index=True)
+
+
+class CartItem(Base):
+    __tablename__ = 'cart_items'
+    user_id = Column(Integer, ForeignKey('users.id', ondelete='CASCADE'), primary_key=True)
+    model_id = Column(Integer, ForeignKey('equipment_models.id', ondelete='RESTRICT'), primary_key=True)
+    lab_id = Column(Integer, ForeignKey('labs.id', ondelete='RESTRICT'), primary_key=True)
+    quantity = Column(Integer, nullable=False)
+    __table_args__ = (CheckConstraint('quantity BETWEEN 1 AND 500', name='ck_cart_quantity'),)
 
 
 class ExtensionRequest(Base):
@@ -297,6 +328,7 @@ class Transaction(Base):
     __tablename__ = "transactions"
     id = Column(Integer, primary_key=True, index=True)
     request_id = Column(Integer, ForeignKey("requests.id", ondelete="RESTRICT"), nullable=False, index=True)
+    request_item_id = Column(Integer, ForeignKey('request_items.id', ondelete='RESTRICT'), nullable=True, index=True)
     unit_asset_id = Column(String, ForeignKey("equipment_units.asset_id", ondelete="RESTRICT"), nullable=False)
     borrower_id = Column(Integer, ForeignKey("users.id", ondelete="RESTRICT"), nullable=False, index=True)
     lab_id = Column(Integer, ForeignKey("labs.id", ondelete="RESTRICT"), nullable=False)

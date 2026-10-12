@@ -1,0 +1,13 @@
+.portal-main-content { min-width: 0; }
+@media (max-width: 767px) {
+  .portal-body { flex-direction: column; }
+  .portal-sidebar { display: none !important; width: 100% !important; min-height: 0 !important; }
+  .portal-sidebar.is-open { display: flex !important; }
+  .mobile-toggle-btn { display: inline-flex !important; }
+  .portal-main-content { padding: 1rem !important; }
+  .portal-main-header { padding: .75rem !important; gap: .5rem; }
+  .portal-header-controls { gap: .5rem !important; }
+  .portal-profile-label { display: none; }
+  .portal-top-strip { padding: 4px .75rem !important; font-size: .6rem !important; }
+  .portal-top-strip > span:last-child { display: none; }
+}

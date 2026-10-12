@@ -222,7 +222,7 @@ async def update_unit_status(
     if current_user.role not in [RoleEnum.ADMIN, RoleEnum.ASSISTANT]:
         raise HTTPException(status_code=403, detail="Not authorized")
 
-    result = await db.execute(select(EquipmentUnit).where(EquipmentUnit.asset_id == asset_id))
+    result = await db.execute(select(EquipmentUnit).where(EquipmentUnit.asset_id == asset_id).with_for_update())
     unit = result.scalars().first()
     if not unit:
         raise HTTPException(status_code=404, detail="Unit not found")
@@ -232,6 +232,11 @@ async def update_unit_status(
         lab_ids = await get_assistant_labs(db, current_user.id)
         if unit.lab_id not in lab_ids:
             raise HTTPException(status_code=403, detail="Not authorized for this lab")
+
+    if status_update.status == UnitStatusEnum.RESERVED:
+        raise HTTPException(409, 'Only request submission can reserve equipment')
+    if unit.status == UnitStatusEnum.RESERVED and status_update.status is not None:
+        raise HTTPException(409, 'Unit is allocated to a request. Reject or cancel that request before changing stock status.')
 
     # FIX: Prevent manually setting AVAILABLE on a currently loaned unit
     if status_update.status == UnitStatusEnum.AVAILABLE:

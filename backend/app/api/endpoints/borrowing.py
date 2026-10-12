@@ -2,13 +2,14 @@ from app.services.lab_access import get_assistant_labs
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.future import select
-from sqlalchemy import func
+from sqlalchemy import func, or_
 from typing import List
 from datetime import datetime, timedelta, timezone
 
 from app.db.database import get_db
 from app.db.models import (
     Request,
+    RequestItem,
     Transaction,
     EquipmentModel,
     EquipmentUnit,
@@ -32,6 +33,9 @@ from app.schemas.borrowing import (
     TransactionResponse, ExtensionRequest as ExtensionRequestSchema,
     QuickBorrowRequest, WalkInIssueRequest, EventIssueCreate
 )
+from app.schemas.borrowing import CartSelection
+from app.services.cart_requests import allocate_request, request_response
+from app.services.request_fulfillment import decide_items, checkout_allocated, sync_returned_item
 from app.api.deps import get_current_user, require_role
 from app.api.endpoints.notifications import create_notification
 
@@ -53,10 +57,22 @@ async def named_responses(db, records, schema, id_field, name_field, role_field)
         return []
     users = (await db.execute(select(User.id, User.name, User.role).where(User.id.in_(ids)))).all()
     names = {user.id: user for user in users}
+    details = {}
+    if schema is TransactionResponse:
+        from app.db.models import Lab
+        rows = (await db.execute(select(Transaction.id.label('transaction_id'), EquipmentModel.id.label('model_id'), EquipmentModel.name, Lab.name.label('lab_name'))
+            .select_from(Transaction)
+            .join(EquipmentUnit, EquipmentUnit.asset_id == Transaction.unit_asset_id)
+            .join(EquipmentModel, EquipmentModel.id == EquipmentUnit.model_id)
+            .join(Lab, Lab.id == Transaction.lab_id)
+            .where(Transaction.id.in_([record.id for record in records])))).all()
+        details = {row.transaction_id: {'model_id': row.model_id, 'equipment_name': row.name, 'lab_name': row.lab_name} for row in rows}
     return [schema.model_validate(record).model_copy(update={
         name_field: names[getattr(record, id_field)].name,
         role_field: names[getattr(record, id_field)].role.value,
+        **details.get(record.id, {}),
     }) for record in records]
+
 
 
 @router.post("/requests", response_model=RequestResponse)
@@ -65,87 +81,23 @@ async def create_request(
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user)
 ):
-    if current_user.role not in [RoleEnum.STUDENT, RoleEnum.FACULTY]:
-        raise HTTPException(status_code=403, detail="Only students and faculty can make reservations")
-
     if req_in.kind not in (None, RequestKindEnum.STANDARD, RequestKindEnum.QUICK_BORROW):
-        raise HTTPException(status_code=400, detail='Use the counter or event issue workflow for this request kind')
-
-    # Normalize before comparing: date-only and timestamp inputs can be mixed.
-    req_from = req_in.required_from if req_in.required_from.tzinfo else req_in.required_from.replace(tzinfo=timezone.utc)
-    req_until = req_in.required_until if req_in.required_until.tzinfo else req_in.required_until.replace(tzinfo=timezone.utc)
-    if req_in.kind == RequestKindEnum.QUICK_BORROW:
-        req_until = quick_borrow_deadline(req_from, current_user.role)
-        if req_until <= datetime.now(timezone.utc):
-            raise HTTPException(status_code=400, detail="The Quick Borrow date has already ended")
-    if req_until <= req_from:
-        raise HTTPException(status_code=400, detail="required_until must be after required_from")
-
-    if req_in.quantity is not None and req_in.quantity < 1:
-        raise HTTPException(status_code=400, detail="quantity must be at least 1")
-
-    delta = req_until - req_from
-
-    # Get settings
-    settings_res = await db.execute(
-        select(SystemSetting).where(
-            SystemSetting.key.in_(["STUDENT_MAX_BORROW_DAYS", "FACULTY_MAX_BORROW_DAYS", "STUDENT_MAX_ITEMS"])
-        )
-    )
-    settings_dict = {s.key: int(s.value) for s in settings_res.scalars().all()}
-
-    max_student_days = settings_dict.get("STUDENT_MAX_BORROW_DAYS", 14)
-    max_faculty_days = settings_dict.get("FACULTY_MAX_BORROW_DAYS", 30)
-    max_student_items = settings_dict.get("STUDENT_MAX_ITEMS", 3)
-
-    if current_user.role == RoleEnum.STUDENT and delta > timedelta(days=max_student_days):
-        raise HTTPException(status_code=400, detail=f"Students can borrow for a maximum of {max_student_days} days")
-    if current_user.role == RoleEnum.FACULTY and delta > timedelta(days=max_faculty_days):
-        raise HTTPException(status_code=400, detail=f"Faculty can borrow for a maximum of {max_faculty_days} days")
-
-    # Enforce max concurrent items for students — count active transactions, not just requests
-    if current_user.role == RoleEnum.STUDENT:
-        active_count_res = await db.execute(
-            select(func.count(Transaction.id))
-            .where(Transaction.borrower_id == current_user.id)
-            .where(Transaction.status == TransactionStatusEnum.ACTIVE)
-        )
-        active_count = active_count_res.scalar() or 0
-        # Also count pending/approved requests not yet issued
-        pending_req_res = await db.execute(
-            select(func.sum(Request.quantity))
-            .where(Request.requester_id == current_user.id)
-            .where(Request.status.in_([RequestStatusEnum.PENDING, RequestStatusEnum.APPROVED]))
-        )
-        pending_qty = pending_req_res.scalar() or 0
-        total_active = active_count + pending_qty + (req_in.quantity or 1)
-        if total_active > max_student_items:
-            raise HTTPException(
-                status_code=400,
-                detail=f"Students cannot have more than {max_student_items} active borrowed/pending items simultaneously."
-            )
-
-    # Check equipment exists
-    model_result = await db.execute(select(EquipmentModel).where(EquipmentModel.id == req_in.model_id))
-    eq_model = model_result.scalars().first()
-    if not eq_model:
-        raise HTTPException(status_code=404, detail="Equipment model not found")
-
-    new_request = Request(
-        requester_id=current_user.id,
-        model_id=req_in.model_id,
-        lab_id=eq_model.lab_id,
-        required_from=req_from,
-        required_until=req_until,
-        status=RequestStatusEnum.PENDING,
-        kind=req_in.kind or RequestKindEnum.STANDARD,
-        quantity=req_in.quantity or 1,
-        purpose=req_in.purpose
-    )
-    db.add(new_request)
-    await db.commit()
-    await db.refresh(new_request)
-    return new_request
+        raise HTTPException(400, 'Use the counter or event workflow for this request kind')
+    model = await db.get(EquipmentModel, req_in.model_id)
+    if not model:
+        raise HTTPException(404, 'Equipment model not found')
+    due = (quick_borrow_deadline(req_in.required_from, current_user.role)
+           if req_in.kind == RequestKindEnum.QUICK_BORROW else req_in.required_until)
+    try:
+        request = await allocate_request(db, current_user,
+            [CartSelection(model_id=model.id, lab_id=model.lab_id, quantity=req_in.quantity or 1)],
+            req_in.required_from, due, req_in.purpose,
+            kind=req_in.kind or RequestKindEnum.STANDARD)
+        await db.commit()
+        return await request_response(db, request)
+    except HTTPException:
+        await db.rollback()
+        raise
 
 
 @router.get("/requests/pending", response_model=List[RequestResponse])
@@ -158,10 +110,11 @@ async def get_pending_requests(
         return []
     result = await db.execute(
         select(Request)
-        .where(Request.lab_id.in_(lab_ids))
+        .where(or_(Request.lab_id.in_(lab_ids), select(RequestItem.id).where(
+            RequestItem.request_id == Request.id, RequestItem.lab_id.in_(lab_ids)).exists()))
         .where(Request.status == RequestStatusEnum.PENDING)
     )
-    return await named_responses(db, result.scalars().all(), RequestResponse, "requester_id", "requester_name", "requester_role")
+    return [await request_response(db, request) for request in result.scalars().all()]
 
 
 @router.get("/requests", response_model=List[RequestResponse])
@@ -175,10 +128,11 @@ async def list_all_requests(
         lab_ids = await get_assistant_labs(db, current_user.id)
         if not lab_ids:
             return []
-        result = await db.execute(select(Request).where(Request.lab_id.in_(lab_ids)))
+        result = await db.execute(select(Request).where(or_(Request.lab_id.in_(lab_ids), select(RequestItem.id).where(
+            RequestItem.request_id == Request.id, RequestItem.lab_id.in_(lab_ids)).exists())))
     else:
         result = await db.execute(select(Request).where(Request.requester_id == current_user.id))
-    return await named_responses(db, result.scalars().all(), RequestResponse, "requester_id", "requester_name", "requester_role")
+    return [await request_response(db, request) for request in result.scalars().all()]
 
 
 @router.get("/transactions", response_model=List[TransactionResponse])
@@ -204,10 +158,14 @@ async def approve_request(
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(require_role(RoleEnum.ASSISTANT))
 ):
-    req_result = await db.execute(select(Request).where(Request.id == request_id))
+    req_result = await db.execute(select(Request).where(Request.id == request_id).with_for_update())
     req = req_result.scalars().first()
     if not req:
         raise HTTPException(status_code=404, detail="Request not found")
+
+    items = (await db.scalars(select(RequestItem).where(RequestItem.request_id == req.id))).all()
+    if items:
+        return await decide_items(db, req, items, current_user, True)
 
     # FIX: Guard against invalid state transitions — only PENDING can be approved
     if req.status != RequestStatusEnum.PENDING:
@@ -245,10 +203,14 @@ async def reject_request(
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(require_role(RoleEnum.ASSISTANT))
 ):
-    req_result = await db.execute(select(Request).where(Request.id == request_id))
+    req_result = await db.execute(select(Request).where(Request.id == request_id).with_for_update())
     req = req_result.scalars().first()
     if not req:
         raise HTTPException(status_code=404, detail="Request not found")
+
+    items = (await db.scalars(select(RequestItem).where(RequestItem.request_id == req.id))).all()
+    if items:
+        return await decide_items(db, req, items, current_user, False)
 
     # FIX: Guard against invalid state transitions — only PENDING can be rejected
     if req.status != RequestStatusEnum.PENDING:
@@ -292,7 +254,7 @@ async def request_extension(
     if current_user.role not in [RoleEnum.STUDENT, RoleEnum.FACULTY]:
         raise HTTPException(status_code=403, detail="Only students and faculty can request extensions")
 
-    req_result = await db.execute(select(Request).where(Request.id == request_id))
+    req_result = await db.execute(select(Request).where(Request.id == request_id).with_for_update())
     req = req_result.scalars().first()
     if not req:
         raise HTTPException(status_code=404, detail="Request not found")
@@ -354,7 +316,7 @@ async def approve_extension(
     current_user: User = Depends(require_role(RoleEnum.ASSISTANT))
 ):
     """Assistant approves extension, updates ALL active transaction due_dates."""
-    req_result = await db.execute(select(Request).where(Request.id == request_id))
+    req_result = await db.execute(select(Request).where(Request.id == request_id).with_for_update())
     req = req_result.scalars().first()
     if not req:
         raise HTTPException(status_code=404, detail="Request not found")
@@ -372,6 +334,11 @@ async def approve_extension(
     ext_req = ext_res.scalars().first()
     if not ext_req:
         raise HTTPException(status_code=400, detail="No pending extension for this request")
+
+    active_labs = set((await db.scalars(select(Transaction.lab_id).where(
+        Transaction.request_id == request_id, Transaction.status == TransactionStatusEnum.ACTIVE))).all())
+    if not active_labs.issubset(set(lab_ids)):
+        raise HTTPException(403, 'All labs with active items must be assigned to you to extend this combined request')
 
     # FIX: Update ALL active transactions, not just the first one
     trans_result = await db.execute(
@@ -410,8 +377,13 @@ async def checkout_equipment(
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(require_role(RoleEnum.ASSISTANT))
 ):
-    req_result = await db.execute(select(Request).where(Request.id == checkout_req.request_id))
+    req_result = await db.execute(select(Request).where(Request.id == checkout_req.request_id).with_for_update())
     req = req_result.scalars().first()
+    if not req:
+        raise HTTPException(404, 'Request not found')
+    items = (await db.scalars(select(RequestItem).where(RequestItem.request_id == req.id))).all()
+    if items:
+        return await checkout_allocated(db, req, items, current_user, checkout_req.asset_id)
     if not req or req.status != RequestStatusEnum.APPROVED:
         raise HTTPException(status_code=400, detail="Invalid request or request not approved")
 
@@ -427,7 +399,7 @@ async def checkout_equipment(
     if req.lab_id not in lab_ids:
         raise HTTPException(status_code=403, detail="Not authorized for this lab")
 
-    unit_result = await db.execute(select(EquipmentUnit).where(EquipmentUnit.asset_id == checkout_req.asset_id))
+    unit_result = await db.execute(select(EquipmentUnit).where(EquipmentUnit.asset_id == checkout_req.asset_id).with_for_update())
     unit = unit_result.scalars().first()
 
     if not unit:
@@ -453,6 +425,9 @@ async def checkout_equipment(
     )
     current_count = tx_count_res.scalar() or 0
 
+    total_issued = await db.scalar(select(func.count(Transaction.id)).where(Transaction.request_id == req.id))
+    if total_issued >= req.quantity:
+        raise HTTPException(409, 'All requested units have already been issued')
     unit.status = UnitStatusEnum.ISSUED
     if current_count + 1 >= req.quantity:
         req.status = RequestStatusEnum.ISSUED
@@ -503,11 +478,13 @@ async def return_equipment(
     if not transaction:
         raise HTTPException(status_code=404, detail="No active transaction found for this asset")
 
-    unit_result = await db.execute(select(EquipmentUnit).where(EquipmentUnit.asset_id == ret_req.asset_id))
-    unit = unit_result.scalars().first()
-
-    req_result = await db.execute(select(Request).where(Request.id == transaction.request_id))
+    req_result = await db.execute(select(Request).where(Request.id == transaction.request_id).with_for_update())
     req = req_result.scalars().first()
+    unit_result = await db.execute(select(EquipmentUnit).where(EquipmentUnit.asset_id == ret_req.asset_id).with_for_update())
+    unit = unit_result.scalars().first()
+    await db.refresh(transaction, with_for_update=True)
+    if transaction.status != TransactionStatusEnum.ACTIVE:
+        raise HTTPException(409, 'This unit has already been returned')
 
     lab_ids = await get_assistant_labs(db, current_user.id)
     if transaction.lab_id not in lab_ids:
@@ -541,7 +518,9 @@ async def return_equipment(
     )
     remaining_active = remaining_active_res.scalar() or 0
 
-    if remaining_active == 0 and req:
+    if req and transaction.request_item_id:
+        await sync_returned_item(db, req, transaction)
+    elif remaining_active == 0 and req:
         req.status = RequestStatusEnum.RETURNED
 
     await db.commit()
@@ -567,7 +546,7 @@ async def quick_borrow(
     current_user: User = Depends(require_role(RoleEnum.ASSISTANT))
 ):
     """Quick-borrow flow: assistant scans student ID + equipment QR, auto-issues."""
-    unit_result = await db.execute(select(EquipmentUnit).where(EquipmentUnit.asset_id == quick_req.asset_id))
+    unit_result = await db.execute(select(EquipmentUnit).where(EquipmentUnit.asset_id == quick_req.asset_id).with_for_update())
     unit = unit_result.scalars().first()
     if not unit:
         raise HTTPException(status_code=404, detail="Equipment unit not found")
@@ -650,81 +629,8 @@ async def quick_return(
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(require_role(RoleEnum.ASSISTANT))
 ):
-    """Quick-return: scan asset QR, auto-locate active transaction, mark returned."""
-    trans_result = await db.execute(
-        select(Transaction)
-        .where(Transaction.unit_asset_id == asset_id)
-        .where(Transaction.status == TransactionStatusEnum.ACTIVE)
-    )
-    transaction = trans_result.scalars().first()
-    if not transaction:
-        raise HTTPException(status_code=404, detail="No active transaction found for this asset")
-
-    unit_result = await db.execute(select(EquipmentUnit).where(EquipmentUnit.asset_id == asset_id))
-    unit = unit_result.scalars().first()
-
-    req_result = await db.execute(select(Request).where(Request.id == transaction.request_id))
-    req = req_result.scalars().first()
-
-    lab_ids = await get_assistant_labs(db, current_user.id)
-    if transaction.lab_id not in lab_ids:
-        raise HTTPException(status_code=403, detail="Not authorized for this lab")
-
-    transaction.status = TransactionStatusEnum.RETURNED
-    transaction.return_date = datetime.now(timezone.utc)
-    unit.status = UnitStatusEnum.AVAILABLE
-    if req:
-        req.status = RequestStatusEnum.RETURNED
-
-    await db.commit()
-    await db.refresh(transaction)
-    return transaction
-
-
-@router.get("/quick-borrow/stats")
-async def quick_borrow_stats(
-    db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(require_role(RoleEnum.ASSISTANT))
-):
-    """Returns quick-borrow stats for the assistant's assigned labs."""
-    today_start = datetime.now(timezone.utc).replace(hour=0, minute=0, second=0, microsecond=0)
-
-    # FIX: Scope stats to the assistant's assigned labs
-    lab_ids = await get_assistant_labs(db, current_user.id)
-    if not lab_ids:
-        return {"currentlyOut": 0, "returnedToday": 0, "overdue": 0}
-
-    out_result = await db.execute(
-        select(func.count(Transaction.id))
-        .where(Transaction.is_quick_borrow == True)
-        .where(Transaction.status == TransactionStatusEnum.ACTIVE)
-        .where(Transaction.lab_id.in_(lab_ids))
-    )
-    currently_out = out_result.scalar() or 0
-
-    returned_result = await db.execute(
-        select(func.count(Transaction.id))
-        .where(Transaction.is_quick_borrow == True)
-        .where(Transaction.status == TransactionStatusEnum.RETURNED)
-        .where(Transaction.return_date >= today_start)
-        .where(Transaction.lab_id.in_(lab_ids))
-    )
-    returned_today = returned_result.scalar() or 0
-
-    overdue_result = await db.execute(
-        select(func.count(Transaction.id))
-        .where(Transaction.is_quick_borrow == True)
-        .where(Transaction.status == TransactionStatusEnum.ACTIVE)
-        .where(Transaction.due_date < datetime.now(timezone.utc))
-        .where(Transaction.lab_id.in_(lab_ids))
-    )
-    overdue = overdue_result.scalar() or 0
-
-    return {
-        "currentlyOut": currently_out,
-        "returnedToday": returned_today,
-        "overdue": overdue
-    }
+    # Share unit locks, item completion and existing return/email behavior.
+    return await return_equipment(ReturnRequest(asset_id=asset_id), db, current_user)
 
 
 @router.post("/walk-in", response_model=TransactionResponse)
@@ -735,7 +641,7 @@ async def walk_in_issue(
 ):
     try:
         # 1. Verify unit exists and is AVAILABLE
-        unit_result = await db.execute(select(EquipmentUnit).where(EquipmentUnit.asset_id == walkin_req.asset_id))
+        unit_result = await db.execute(select(EquipmentUnit).where(EquipmentUnit.asset_id == walkin_req.asset_id).with_for_update())
         unit = unit_result.scalars().first()
         if not unit:
             raise HTTPException(status_code=404, detail="Equipment unit not found")

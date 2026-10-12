@@ -1,5 +1,6 @@
-import { useAuth, useLabTrack } from '../context/hooks';
+import { useAuth, useLabTrack, useCart } from '../context/hooks';
 import React, { useState } from 'react';
+import './MainLayout.css';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { NotificationPanel } from '../components/notification/NotificationPanel';
 import { Breadcrumb } from '../components/common/Breadcrumb';
@@ -25,11 +26,13 @@ import {
   CalendarCheck,
   PackagePlus,
   QrCode,
-  Zap
+  Zap,
+  ShoppingCart
 } from 'lucide-react';
 
 export const MainLayout = ({ children }) => {
   const { user, logout } = useAuth();
+  const { cart } = useCart();
   const { notificationsList } = useLabTrack();
   const location = useLocation();
   const navigate = useNavigate();
@@ -110,7 +113,7 @@ export const MainLayout = ({ children }) => {
     return [
       { label: 'Dashboard', path: '/student/dashboard', icon: LayoutDashboard },
       { label: 'Browse Equipment', path: '/browse-equipment', icon: Search },
-      { label: 'Request Equipment', path: '/request-equipment', icon: Send },
+      { label: 'Equipment Cart', path: '/cart', icon: ShoppingCart, badge: cart.count },
       { label: 'My Borrowings', path: '/transactions', icon: BookOpen },
       { label: 'My Requests', path: '/requests', icon: FileSpreadsheet },
       { label: 'Notifications', path: '/notifications', icon: Bell, badge: unreadCount },
@@ -135,6 +138,7 @@ export const MainLayout = ({ children }) => {
       >
         {/* Top institutional strip */}
         <div
+          className="portal-top-strip"
           style={{
             backgroundColor: 'var(--color-bg-header-top)',
             padding: '4px 1.5rem',
@@ -151,6 +155,7 @@ export const MainLayout = ({ children }) => {
 
         {/* Main Header Bar */}
         <div
+          className="portal-main-header"
           style={{
             display: 'flex',
             alignItems: 'center',
@@ -162,6 +167,8 @@ export const MainLayout = ({ children }) => {
           <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
             <button
               onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
+              aria-label="Toggle navigation"
+              aria-expanded={mobileMenuOpen}
               style={{
                 display: 'none',
                 background: 'none',
@@ -188,7 +195,8 @@ export const MainLayout = ({ children }) => {
           </div>
 
           {/* Right Controls */}
-          <div style={{ display: 'flex', alignItems: 'center', gap: '1.25rem' }}>
+          <div className="portal-header-controls" style={{ display: 'flex', alignItems: 'center', gap: '1.25rem' }}>
+            {role === 'student' && <Link to="/cart" style={{ color: '#fff', display: 'flex', alignItems: 'center', gap: '6px' }} aria-label={`Equipment cart, ${cart.count} units`}><ShoppingCart size={20} /><span>{cart.count}</span></Link>}
             {/* Notification Bell */}
             <div style={{ position: 'relative' }}>
               <button
@@ -236,7 +244,7 @@ export const MainLayout = ({ children }) => {
 
             {/* User Profile Tag */}
             <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', paddingLeft: '1rem', borderLeft: '1px solid rgba(255,255,255,0.2)' }}>
-              <div style={{ textAlign: 'right' }}>
+              <div className="portal-profile-label" style={{ textAlign: 'right' }}>
                 <div style={{ fontSize: '0.85rem', fontWeight: 600, color: '#ffffff' }}>
                   {user?.name || 'Portal User'}
                 </div>
@@ -264,7 +272,7 @@ export const MainLayout = ({ children }) => {
       </header>
 
       {/* BODY CONTENT AREA WITH SIDEBAR */}
-      <div style={{ display: 'flex', flex: 1 }}>
+      <div className="portal-body" style={{ display: 'flex', flex: 1 }}>
         {/* LEFT SIDEBAR NAVIGATION */}
         <aside
           style={{
@@ -277,7 +285,7 @@ export const MainLayout = ({ children }) => {
             justifyContent: 'space-between',
             minHeight: 'calc(100vh - 85px)'
           }}
-          className="portal-sidebar"
+          className={`portal-sidebar ${mobileMenuOpen ? 'is-open' : ''}`}
         >
           <div>
             <div style={{ padding: '0 1.25rem 0.75rem', fontSize: '0.7rem', fontWeight: 700, color: '#94a3b8', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
@@ -292,6 +300,7 @@ export const MainLayout = ({ children }) => {
                   <Link
                     key={item.path}
                     to={item.path}
+                    onClick={() => setMobileMenuOpen(false)}
                     style={{
                       display: 'flex',
                       alignItems: 'center',
@@ -339,7 +348,7 @@ export const MainLayout = ({ children }) => {
         </aside>
 
         {/* MAIN CONTENT AREA */}
-        <main style={{ flex: 1, padding: '1.5rem 2rem', backgroundColor: '#f8fafc', overflowX: 'hidden' }}>
+        <main className="portal-main-content" style={{ flex: 1, padding: '1.5rem 2rem', backgroundColor: '#f8fafc', overflowX: 'hidden' }}>
           <Breadcrumb />
           {children}
         </main>

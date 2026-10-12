@@ -9,6 +9,7 @@ export const StatusBadge = ({ status }) => {
       case 'active':
       case 'completed':
         return 'badge-success';
+      case 'reserved':
       case 'pending':
       case 'calibration required':
       case 'due soon':

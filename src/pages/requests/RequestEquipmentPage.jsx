@@ -1,11 +1,17 @@
 import { useLabTrack, useAuth } from '../../context/hooks';
 import { formatDate } from '../../utils/dateFormat';
 import React, { useState } from 'react';
+import { CartPage } from './CartPage';
 import { PageHeader } from '../../components/common/PageHeader';
 import { useNavigate } from 'react-router-dom';
 import { Send, Clock, AlertCircle, Calendar } from 'lucide-react';
 
 export const RequestEquipmentPage = ({ quickBorrow = false }) => {
+  const { user } = useAuth();
+  return user?.role === 'student' && !quickBorrow ? <CartPage /> : <SingleRequestEquipmentPage quickBorrow={quickBorrow} />;
+};
+
+const SingleRequestEquipmentPage = ({ quickBorrow = false }) => {
   const navigate = useNavigate();
   const { user } = useAuth();
   const { equipmentList, createRequestAction, systemSettings } = useLabTrack();

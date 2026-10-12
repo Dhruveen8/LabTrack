@@ -244,3 +244,7 @@ LABTRACK/
 ├── docker-compose.yml       Optional complete container setup
 └── package.json             Frontend dependencies and commands
 ```
+
+### Student equipment carts
+
+Students can submit multiple equipment types as one request from Equipment Cart. Drafts do not reserve stock; submission allocates all units atomically and reports stock conflicts without removing items. See [cart setup and assistant workflow](backend/CART_REQUESTS.md) for migration, per-lab approvals, scanning, expiry and test instructions.

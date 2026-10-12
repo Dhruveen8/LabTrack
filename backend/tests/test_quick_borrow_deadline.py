@@ -35,12 +35,13 @@ def test_same_day_requests_cannot_be_extended():
         borrowing.request_extension(1, ExtensionRequest(new_due_date=datetime(2027, 1, 1, tzinfo=timezone.utc)), db, SimpleNamespace(id=5, role=RoleEnum.FACULTY)).send(None)
 
 
-def test_quick_request_waits_for_assistant_and_overrides_long_deadline():
-    settings = MagicMock()
-    settings.scalars.return_value.all.return_value = []
-    model = MagicMock()
-    model.scalars.return_value.first.return_value = SimpleNamespace(id=20, lab_id=11)
-    db = SimpleNamespace(execute=AsyncMock(side_effect=[settings, model]), add=MagicMock(), commit=AsyncMock(), refresh=AsyncMock())
+def test_quick_request_waits_for_assistant_and_overrides_long_deadline(monkeypatch):
+    db = SimpleNamespace(get=AsyncMock(return_value=SimpleNamespace(id=20, lab_id=11)), commit=AsyncMock())
+    request = SimpleNamespace(status=RequestStatusEnum.PENDING, lab_id=11,
+                              required_until=datetime(2027, 1, 5, 18, 29, 59, tzinfo=timezone.utc))
+    allocation = AsyncMock(return_value=request)
+    monkeypatch.setattr(borrowing, 'allocate_request', allocation)
+    monkeypatch.setattr(borrowing, 'request_response', AsyncMock(return_value=request))
     body = RequestCreate(model_id=20, required_from='2027-01-05T00:00:00+05:30', required_until='2027-01-20T00:00:00+05:30', kind=RequestKindEnum.QUICK_BORROW)
     with pytest.raises(StopIteration) as completed:
         borrowing.create_request(body, db, SimpleNamespace(id=5, role=RoleEnum.FACULTY)).send(None)
@@ -48,3 +49,4 @@ def test_quick_request_waits_for_assistant_and_overrides_long_deadline():
     assert request.status == RequestStatusEnum.PENDING
     assert request.lab_id == 11
     assert request.required_until == datetime(2027, 1, 5, 18, 29, 59, tzinfo=timezone.utc)
+    assert allocation.call_args.args[4] == request.required_until

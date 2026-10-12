@@ -1,6 +1,7 @@
-import { useLabTrack, useAuth } from '../../context/hooks';
+import { useLabTrack, useAuth, useToast } from '../../context/hooks';
 import { formatDate } from '../../utils/dateFormat';
 import React, { useState } from 'react';
+import { requestHasLab, requestHasStage, cartError } from '../../utils/cart';
 import { PageHeader } from '../../components/common/PageHeader';
 import { DataTable } from '../../components/common/DataTable';
 import { StatusBadge } from '../../components/common/StatusBadge';
@@ -9,6 +10,7 @@ import { Send, CheckCircle, XCircle, RefreshCw, QrCode, Sparkles } from 'lucide-
 
 export const RequestsListPage = () => {
   const { user } = useAuth();
+  const { addToast } = useToast();
   const { requestsList, transactionsList, updateRequestStatusAction, approveExtensionAction } = useLabTrack();
   const [filterStatus, setFilterStatus] = useState('ALL');
   const navigate = useNavigate();
@@ -19,22 +21,22 @@ export const RequestsListPage = () => {
   // Filter requests based on role
   let visibleRequests = requestsList;
   if (isAssistant && assignedLabIds.length > 0) {
-    visibleRequests = requestsList.filter(r => assignedLabIds.includes(r.labId));
+    visibleRequests = requestsList.filter(r => requestHasLab(r, assignedLabIds));
   } else if (user?.role === 'student' || user?.role === 'faculty') {
     visibleRequests = requestsList.filter(r => r.requesterId === user.id || r.requesterName === user.name);
   }
 
   // Apply tab filter
   if (filterStatus !== 'ALL') {
-    visibleRequests = visibleRequests.filter(r => r.status?.toLowerCase() === filterStatus.toLowerCase());
+    visibleRequests = visibleRequests.filter(r => requestHasStage(r, filterStatus.toUpperCase(), isAssistant ? assignedLabIds : undefined));
   }
 
   const handleApprove = async (row) => {
-    await updateRequestStatusAction(row.id, 'Approved');
+    try { await updateRequestStatusAction(row.id, 'Approved'); return true; } catch (error) { addToast(cartError(error), 'error'); return false; }
   };
 
   const handleReject = async (row) => {
-    await updateRequestStatusAction(row.id, 'Rejected');
+    try { await updateRequestStatusAction(row.id, 'Rejected'); } catch (error) { addToast(cartError(error), 'error'); }
   };
 
   const handleApproveExtension = async (row) => {
@@ -67,7 +69,10 @@ export const RequestsListPage = () => {
       accessor: 'equipmentName',
       cell: (row) => (
         <div>
-          <div style={{ fontWeight: 600, color: '#0f172a' }}>{row.equipmentName}</div>
+          {row.items?.length ? row.items.map(item => <div key={item.id} style={{ marginBottom: '8px' }}>
+            <strong>{item.equipment_name} × {item.quantity}</strong>
+            <div style={{ fontSize: '.75rem', color: '#64748b' }}>{item.lab_name} · {item.status} · {item.issued_quantity} issued / {item.returned_quantity} returned</div>
+          </div>) : <div style={{ fontWeight: 600, color: '#0f172a' }}>{row.equipmentName}</div>}
           {row.kind === 'QUICK_BORROW' && <span className="badge badge-warning">Quick Borrow · Same-day return</span>}
           <div style={{ fontSize: '0.75rem', color: '#64748b' }}>{row.labName} (Qty: {row.quantity || 1})</div>
         </div>
@@ -136,7 +141,7 @@ export const RequestsListPage = () => {
       cell: (row) => (
         <div style={{ display: 'flex', gap: '0.35rem', flexWrap: 'wrap' }}>
           {/* ONLY Assistant has the right to approve requests */}
-          {isAssistant && row.status === 'Pending' && (
+          {isAssistant && requestHasStage(row, 'PENDING', assignedLabIds) && (
             <>
               <button
                 className="btn btn-primary btn-sm"
@@ -148,7 +153,7 @@ export const RequestsListPage = () => {
               <button
                 className="btn btn-primary btn-sm"
                 onClick={async () => {
-                  await handleApprove(row);
+                  if (!await handleApprove(row)) return;
                   navigate(`/issue-equipment?autoRequestId=${row.id}`);
                 }}
                 style={{ backgroundColor: '#0ea5e9', borderColor: '#0284c7' }}
@@ -177,7 +182,7 @@ export const RequestsListPage = () => {
           )}
 
           {/* Quick link to counter if approved */}
-          {isAssistant && row.status === 'Approved' && (
+          {isAssistant && requestHasStage(row, 'APPROVED', assignedLabIds) && (
             <Link to="/issue-equipment" className="btn btn-secondary btn-sm">
               <QrCode size={13} /> Go to Counter
             </Link>
@@ -223,7 +228,7 @@ export const RequestsListPage = () => {
 
       {/* Filter Tabs */}
       <div style={{ display: 'flex', gap: '0.5rem', marginBottom: '1rem', flexWrap: 'wrap' }}>
-        {['ALL', 'Pending', 'Approved', 'Extension_Pending', 'Issued', 'Returned', 'Rejected'].map(status => (
+        {['ALL', 'Pending', 'Approved', 'Extension_Pending', 'Issued', 'Returned', 'Rejected', 'Cancelled'].map(status => (
           <button
             key={status}
             onClick={() => setFilterStatus(status)}

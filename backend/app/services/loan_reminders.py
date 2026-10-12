@@ -56,6 +56,8 @@ async def queue_reminders(now=None):
 async def reminder_worker(stop: asyncio.Event):
     while not stop.is_set():
         try:
+            from app.services.cart_requests import expire_allocations
+            await expire_allocations()
             await queue_reminders()
         except Exception as error:
             logger.warning('Loan reminder queue unavailable (%s)', type(error).__name__)

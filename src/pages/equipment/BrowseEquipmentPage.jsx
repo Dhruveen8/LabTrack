@@ -1,11 +1,21 @@
 import React from 'react';
 import { PageHeader } from '../../components/common/PageHeader';
-import { useLabTrack } from '../../context/hooks';
+import { useLabTrack, useAuth, useCart, useToast } from '../../context/hooks';
 import { StatusBadge } from '../../components/common/StatusBadge';
 import { Link } from 'react-router-dom';
 import { Send, Eye } from 'lucide-react';
 
 export const BrowseEquipmentPage = () => {
+  const { user } = useAuth();
+  const { add, busy } = useCart();
+  const { addToast } = useToast();
+  const addToCart = async (item) => {
+    try {
+      const result = await add(item.id, item.labId);
+      const current = result.items.find(row => row.model_id === item.id && row.lab_id === item.labId);
+      addToast(current?.insufficient ? 'Kept in cart, but stock is insufficient. Revise before submitting.' : 'Added to cart. Stock is not reserved yet.', current?.insufficient ? 'warning' : 'success');
+    } catch (error) { addToast(error.response?.data?.detail?.message || error.message, 'error'); }
+  };
   const { equipmentList } = useLabTrack();
 
   return (
@@ -32,9 +42,9 @@ export const BrowseEquipmentPage = () => {
               <Link to={`/equipment/${item.id}`} className="btn btn-secondary btn-sm" style={{ flex: 1 }}>
                 <Eye size={14} /> Details
               </Link>
-              <Link to={`/request-equipment?id=${item.id}`} className="btn btn-primary btn-sm" style={{ flex: 1 }}>
+              {user?.role === 'student' ? <button className="btn btn-primary btn-sm" style={{ flex: 1 }} disabled={busy} onClick={() => addToCart(item)}><Send size={14} /> Add to cart</button> : <Link to={`/request-equipment?id=${item.id}`} className="btn btn-primary btn-sm" style={{ flex: 1 }}>
                 <Send size={14} /> Request
-              </Link>
+              </Link>}
             </div>
           </div>
         ))}
