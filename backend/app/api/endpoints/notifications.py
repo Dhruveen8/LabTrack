@@ -94,7 +94,7 @@ async def unread_count(
     count = result.scalar() or 0
     return {"unreadCount": count}
 
-async def create_notification(db: AsyncSession, user_id: int, title: str, message: str, type: NotificationTypeEnum, category: NotificationCategoryEnum):
+async def create_notification(db: AsyncSession, user_id: int, title: str, message: str, type: NotificationTypeEnum, category: NotificationCategoryEnum, *, email_context: Optional[dict] = None):
     """Helper function to create a notification record.
 
     The notification is added to the current session. The CALLER must call
@@ -112,5 +112,5 @@ async def create_notification(db: AsyncSession, user_id: int, title: str, messag
     db.add(notif)
     if settings.email_enabled:
         await db.flush()
-        db.add(NotificationEmail(notification_id=notif.id))
+        db.add(NotificationEmail(notification_id=notif.id, email_context=email_context))
     return notif

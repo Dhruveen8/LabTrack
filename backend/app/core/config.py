@@ -1,6 +1,7 @@
 from pydantic_settings import BaseSettings, SettingsConfigDict
 from pydantic import SecretStr
-from typing import Optional, List, Literal
+from typing import Optional, List
+from pathlib import Path
 from sqlalchemy.engine import URL, make_url
 
 class Settings(BaseSettings):
@@ -37,24 +38,11 @@ class Settings(BaseSettings):
     REDIS_HOST: str = "localhost"
     REDIS_PORT: int = 6379
 
-    SMTP_ENABLED: bool = False
-    SMTP_HOST: str = "smtp.gmail.com"
-    SMTP_PORT: int = 587
-    SMTP_USERNAME: str = "labtrack23@gmail.com"
+    SMTP_ENABLED: bool = True
+    SMTP_USER: str = ""
     SMTP_PASSWORD: SecretStr = SecretStr("")
-    SMTP_FROM_EMAIL: str = "labtrack23@gmail.com"
     SMTP_FROM_NAME: str = "LabTrack"
-    SMTP_USE_SSL: bool = False
     SMTP_TIMEOUT_SECONDS: int = 10
-
-    EMAIL_PROVIDER: Literal['smtp', 'gmail_api'] = 'smtp'
-    GMAIL_ENABLED: bool = False
-    GMAIL_CLIENT_ID: str = ''
-    GMAIL_CLIENT_SECRET: SecretStr = SecretStr('')
-    GMAIL_REFRESH_TOKEN: SecretStr = SecretStr('')
-    GMAIL_FROM_EMAIL: str = 'labtrack23@gmail.com'
-    GMAIL_FROM_NAME: str = 'LabTrack'
-    GMAIL_TIMEOUT_SECONDS: int = 10
 
     # Production startup never loads demo users or equipment automatically.
     BOOTSTRAP_ADMIN_EMAIL: str = ''
@@ -64,21 +52,16 @@ class Settings(BaseSettings):
 
     @property
     def email_enabled(self) -> bool:
-        return self.GMAIL_ENABLED if self.EMAIL_PROVIDER == 'gmail_api' else self.SMTP_ENABLED
+        return self.SMTP_ENABLED
 
     @property
     def email_ready(self) -> bool:
-        if self.EMAIL_PROVIDER == 'gmail_api':
-            return bool(self.GMAIL_ENABLED and self.GMAIL_CLIENT_ID
-                        and self.GMAIL_CLIENT_SECRET.get_secret_value()
-                        and self.GMAIL_REFRESH_TOKEN.get_secret_value() and self.GMAIL_FROM_EMAIL)
         return self.smtp_ready
 
     @property
     def smtp_ready(self) -> bool:
-        return bool(self.SMTP_ENABLED and self.SMTP_HOST and self.SMTP_USERNAME
-                    and self.SMTP_PASSWORD.get_secret_value() and self.SMTP_FROM_EMAIL)
-
+        return bool(self.SMTP_ENABLED and self.SMTP_USER
+                    and self.SMTP_PASSWORD.get_secret_value().replace(' ', ''))
 
     @property
     def db_host(self) -> str:
@@ -107,6 +90,6 @@ class Settings(BaseSettings):
         """Parse comma-separated ALLOWED_ORIGINS into a list."""
         return [origin.strip() for origin in self.ALLOWED_ORIGINS.split(",") if origin.strip()]
 
-    model_config = SettingsConfigDict(env_file=".env", case_sensitive=True, extra="ignore")
+    model_config = SettingsConfigDict(env_file=Path(__file__).resolve().parents[2] / ".env", case_sensitive=True, extra="ignore")
 
 settings = Settings()

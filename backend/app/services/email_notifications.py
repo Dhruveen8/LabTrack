@@ -1,4 +1,4 @@
-"""Deliver committed notifications through Gmail API or SMTP with bounded retries."""
+"""Deliver committed notifications through Gmail SMTP with bounded retries."""
 import asyncio
 from datetime import datetime, timedelta, timezone
 from email.message import EmailMessage
@@ -11,35 +11,33 @@ from sqlalchemy import select
 from app.core.config import settings
 from app.db.database import AsyncSessionLocal
 from app.db.models import Notification, NotificationEmail, User
-from app.services.gmail_api import gmail_sender
+from app.services.email_content import prepare_email
 
 logger = logging.getLogger(__name__)
 MAX_ATTEMPTS = 5
 
 
-def send_email(recipient: str, title: str, body: str, notification_id: int):
+def send_email(recipient: str, title: str, body: str, notification_id: int, *, html=None, subject=None):
     message = EmailMessage()
-    gmail = settings.EMAIL_PROVIDER == 'gmail_api'
-    sender = settings.GMAIL_FROM_EMAIL if gmail else settings.SMTP_FROM_EMAIL
-    sender_name = settings.GMAIL_FROM_NAME if gmail else settings.SMTP_FROM_NAME
+    sender = settings.SMTP_USER
+    sender_name = settings.SMTP_FROM_NAME
     message['From'] = formataddr((sender_name, sender))
     message['To'] = recipient
-    message['Subject'] = f'LabTrack: {title}'
+    message['Subject'] = subject or f'LabTrack: {title}'
     message['Message-ID'] = f'<labtrack-notification-{notification_id}@{sender.split("@")[-1]}>'
-    message.set_content(f'{body}\n\nOpen the LabTrack portal to view your notification.\n')
-    if gmail:
-        gmail_sender.send(message)
-        return
+    message.set_content(body if html else f'{body}\n\nOpen the LabTrack portal to view your notification.\n')
+    if html:
+        message.add_alternative(html, subtype='html')
     context = ssl.create_default_context()
-    smtp_class = smtplib.SMTP_SSL if settings.SMTP_USE_SSL else smtplib.SMTP
-    options = {'timeout': settings.SMTP_TIMEOUT_SECONDS}
-    if settings.SMTP_USE_SSL:
-        options['context'] = context
-    with smtp_class(settings.SMTP_HOST, settings.SMTP_PORT, **options) as smtp:
-        if not settings.SMTP_USE_SSL:
-            smtp.starttls(context=context)
-        smtp.login(settings.SMTP_USERNAME, settings.SMTP_PASSWORD.get_secret_value().replace(' ', ''))
-        smtp.send_message(message)
+    with smtplib.SMTP('smtp.gmail.com', 587, timeout=settings.SMTP_TIMEOUT_SECONDS) as smtp:
+        smtp.ehlo()
+        smtp.starttls(context=context)
+        smtp.ehlo()
+        smtp.login(settings.SMTP_USER, settings.SMTP_PASSWORD.get_secret_value().replace(' ', ''))
+        refused = smtp.send_message(message)
+        if refused:
+            raise smtplib.SMTPRecipientsRefused(refused)
+
 
 
 async def deliver_one() -> bool:
@@ -47,7 +45,7 @@ async def deliver_one() -> bool:
         return False
     async with AsyncSessionLocal() as db:
         # Separate server workers cannot pick the same queued row concurrently.
-        row = (await db.execute(select(NotificationEmail, Notification, User.email)
+        row = (await db.execute(select(NotificationEmail, Notification, User)
             .join(Notification, Notification.id == NotificationEmail.notification_id)
             .join(User, User.id == Notification.user_id)
             .where(NotificationEmail.sent_at.is_(None), NotificationEmail.failed.is_(False),
@@ -56,12 +54,19 @@ async def deliver_one() -> bool:
             .with_for_update(of=NotificationEmail, skip_locked=True).limit(1))).first()
         if row is None:
             return False
-        queued, notification, recipient = row
+        queued, notification, user = row
         queued.attempts += 1
         try:
-            await asyncio.to_thread(send_email, recipient, notification.title,
-                                    notification.message or notification.title, notification.id)
-            queued.sent_at = datetime.now(timezone.utc)
+            content = await prepare_email(db, queued, notification, user)
+            if content is None:
+                # Terminally suppress stale reminders; never retry after return/extension.
+                queued.failed = True
+                logger.info('Notification email %s suppressed (stale reminder)', notification.id)
+            else:
+                await asyncio.to_thread(send_email, user.email, notification.title,
+                                        content.text, notification.id,
+                                        html=content.html, subject=content.subject)
+                queued.sent_at = datetime.now(timezone.utc)
         except Exception as error:
             # Do not log credentials, message bodies or SMTP responses.
             logger.warning('Notification email %s failed (%s); attempt %s',

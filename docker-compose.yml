@@ -23,7 +23,9 @@ services:
       dockerfile: Dockerfile
     container_name: labtrack_backend
     restart: unless-stopped
-    env_file: ./.env
+    env_file:
+      - ./.env
+      - ./backend/.env
     environment:
       # Override host to Docker service name (not localhost)
       - POSTGRES_HOST=db

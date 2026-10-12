@@ -5,17 +5,19 @@ from app.api.api_router import api_router
 import asyncio
 from contextlib import asynccontextmanager
 from app.services.email_notifications import email_worker
+from app.services.loan_reminders import reminder_worker
 
 
 @asynccontextmanager
 async def lifespan(app):
     stop = asyncio.Event()
     worker = asyncio.create_task(email_worker(stop))
+    reminders = asyncio.create_task(reminder_worker(stop))
     try:
         yield
     finally:
         stop.set()
-        await worker
+        await asyncio.gather(worker, reminders)
 
 app = FastAPI(
     lifespan=lifespan,

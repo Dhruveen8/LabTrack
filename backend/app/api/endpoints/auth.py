@@ -1,6 +1,7 @@
 import os
 import secrets
 import re
+import logging
 from fastapi import APIRouter, Depends, HTTPException, status, Header
 from fastapi.security import OAuth2PasswordRequestForm
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -16,6 +17,8 @@ from app.core import security
 from app.api.deps import get_current_user, require_admin
 from app.services.user_ids import institutional_id, next_assistant_number
 from app.services.registration_departments import REGISTRATION_DEPARTMENTS
+from app.api.endpoints.notifications import create_notification
+from app.db.models import NotificationTypeEnum, NotificationCategoryEnum
 
 router = APIRouter()
 
@@ -152,6 +155,15 @@ async def login(
         )
 
     access_token = security.create_access_token(subject=user.id, role=user.role.value)
+    try:
+        await create_notification(db, user.id, 'Successful Login',
+                                  'You have successfully signed in to LabTrack.',
+                                  NotificationTypeEnum.SUCCESS, NotificationCategoryEnum.SYSTEM,
+                                  email_context={'kind': 'login'})
+        await db.commit()
+    except Exception as error:
+        await db.rollback()
+        logging.getLogger(__name__).warning('Login notification failed (%s)', type(error).__name__)
     return {"access_token": access_token, "token_type": "bearer"}
 
 @router.get("/me", response_model=UserSchema)

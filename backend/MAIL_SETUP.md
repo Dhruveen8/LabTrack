@@ -1,45 +1,54 @@
-# Gmail API notifications
+# Gmail SMTP notifications
 
-The configured sender is `labtrack23@gmail.com`. Gmail API sends through HTTPS, so it works on hosting services that block SMTP ports. OAuth client credentials and a refresh token stay in the backend environment; frontend code never receives them. A normal Gmail password or API key is not sufficient.
-
-## One-time Google setup
-
-1. In your [Google Cloud console](https://console.cloud.google.com/), create/select your project and enable **Gmail API** in APIs & Services.
-2. Configure Google Auth Platform branding and audience. For a personal Gmail account select External. While testing, add `labtrack23@gmail.com` as a test user.
-3. Under Data Access add only `https://www.googleapis.com/auth/gmail.send`.
-4. Create an OAuth client of type **Web application**. Add this exact authorized redirect URI: `http://localhost:8765/oauth/callback`.
-5. Download the OAuth client JSON. Keep it private; filenames beginning `client_secret` are excluded from Git and the backend Docker image.
-6. From the backend directory run:
-
-```powershell
-./venv/Scripts/python.exe setup_gmail.py --client-secrets "C:/path/to/client_secret_download.json"
-```
-
-Open the URL printed by the script on this computer. Sign in as **labtrack23@gmail.com** and approve send permission. The local callback uses state validation and PKCE, exchanges the code for a refresh token, and saves credentials directly to `backend/.env` without printing them. The authorization window expires after five minutes. The script does not send a test email.
-
-For Docker, add `--env-file ../.env` to save into the root environment file instead. If deploying later, copy these values privately into the backend host's secret/environment settings:
+1. Enable 2-Step Verification on the sender Google account and create a Google App Password at https://myaccount.google.com/apppasswords.
+2. Add the following to `backend/.env`. Use the full Gmail address and the App Password, never the normal account password. Keep this file private and out of Git.
 
 ```dotenv
-EMAIL_PROVIDER=gmail_api
-GMAIL_ENABLED=true
-GMAIL_FROM_EMAIL=labtrack23@gmail.com
-GMAIL_FROM_NAME=LabTrack
-GMAIL_CLIENT_ID=YOUR_OAUTH_CLIENT_ID
-GMAIL_CLIENT_SECRET=YOUR_PRIVATE_CLIENT_SECRET
-GMAIL_REFRESH_TOKEN=YOUR_PRIVATE_REFRESH_TOKEN
-GMAIL_TIMEOUT_SECONDS=10
+SMTP_ENABLED=true
+SMTP_USER=your-account@gmail.com
+SMTP_PASSWORD=YOUR_GOOGLE_APP_PASSWORD
+SMTP_FROM_NAME=LabTrack
+SMTP_TIMEOUT_SECONDS=10
 ```
 
-Do not paste the JSON, client secret or refresh token into chat or commit them. If the OAuth audience remains External/Testing, refresh tokens with Gmail permission expire after seven days. Move the OAuth app to Production and complete any Google requirements that apply before relying on ongoing delivery. Tokens can also be revoked and require reauthorization. See [Google OAuth token expiry](https://developers.google.com/identity/protocols/oauth2#expiration) and [Gmail send scope](https://developers.google.com/workspace/gmail/api/auth/scopes).
+The service loads `backend/.env` independently of the working directory. Environment variables take precedence. Docker loads root `.env` then `backend/.env`; keep database settings consistent. Remove obsolete EMAIL_PROVIDER and GMAIL_* OAuth settings from deployment secrets manually. No OAuth setup or new dependency is needed; httpx remains used by API tests.
 
-## Enable and verify
+Restart the backend after changing credentials. Delivery uses Python smtplib, smtp.gmail.com port 587 and verified STARTTLS. The hosting network must allow outbound TCP 587. App Password availability depends on Google account policy.
 
-Run `./venv/Scripts/python.exe -m app.startup`, then restart the backend. Approve a real request and confirm the borrower receives the notification, including checking spam. This project cannot verify live delivery until you complete sender authorization. The sender account is addressed explicitly in the Gmail API request, so authorization for a different mailbox will fail.
+Check connectivity without sending mail:
 
-Workflow notifications queue in the same database transaction as the notification. Workers refresh access tokens automatically, retry a stale access token once, and retry failed queued deliveries up to five times. Errors log notification IDs and exception types, not tokens, Google response bodies or recipient message content. Successful rows have `sent_at`; exhausted rows have `failed=true`. Disabled mail does not queue new deliveries. Previously existing notifications are not emailed retroactively.
+```powershell
+cd backend
+./.venv/Scripts/python.exe check_smtp.py
+```
 
-Delivery is at least once: if Google accepts a message but the database commit fails, a retry can duplicate it. Workers use row locks and stable message IDs to reduce duplicates. Sleeping free hosts pause this worker. No daily overdue-reminder scheduler is added.
+This verifies connection, TLS and authentication, and prints no credentials or server responses. It does not send email. Then log in, issue equipment, return it, and verify the borrower inbox and portal notifications. Run unit regressions with `./.venv/Scripts/python.exe -m pytest tests`.
 
-SMTP remains available as an alternative with `EMAIL_PROVIDER=smtp`, `SMTP_ENABLED=true` and the SMTP settings in `.env.example`. The Gmail API integration does not need a Gmail app password.
+Portal notification titles and bodies remain intact. The four primary email flows use branded HTML plus a plain-text fallback and their dedicated subjects: New Login to LabTrack; Equipment Issued Successfully – LabTrack; Reminder: Equipment Return Due Soon – LabTrack; Overdue Equipment Return – LabTrack. Dates are displayed in IST (UTC+05:30). Login notifications and a minute-based loan reminder scheduler fill missing flows in this checkout. Active loans get a reminder when they enter the final 24 hours and one overdue notification per deadline. The scheduler catches up after downtime; a loan already overdue gets only the overdue notification. Returned loans are excluded. Deadline extensions allow a new reminder for the new deadline.
 
-References: [Gmail messages.send](https://developers.google.com/workspace/gmail/api/reference/rest/v1/users.messages/send), [Google OAuth web-server flow](https://developers.google.com/identity/protocols/oauth2/web-server).
+Notifications and the existing outbox persist together. Loan locks and persisted title/body checks prevent duplicate reminder queueing across restarts and workers. Do not delete reminder notification records if deduplication must be retained. SMTP runs in the background and failures never propagate into authentication, issuance or returns. Failures log only IDs and exception types; retries are bounded to five attempts. Inspect notification_emails.sent_at, attempts and failed for delivery status. Disabled mail queues no new emails and existing portal notifications are not retroactively emailed.
+
+SMTP delivery is at least once: acceptance followed by a failed database commit can cause a duplicate delivery. Stable Message-ID and row locks reduce duplicates but cannot guarantee exactly-once delivery through SMTP. The HTML templates require migration h2c7d9e6f4a5, which adds only nullable notification_emails.email_context. Existing records are preserved. This stores template kind, exact transaction IDs, and the reminder deadline, without copying user credentials or personal/equipment details. New issuance emails resolve each transaction to its unit and that unit’s model; event batches include all units. Pre-upgrade issuance notifications retain their generic content because they have no unambiguous transaction references. Existing login and loan-ID reminder notifications can use the new templates. Stale reminders (returned loan, changed deadline, expired upcoming stage) are terminally suppressed with failed=true and an informational log rather than sent.
+
+
+## Apply the template migration
+
+From the backend directory, with the backend stopped:
+
+```powershell
+./.venv/Scripts/python.exe -m alembic upgrade head
+```
+
+Then restart the backend normally. Do not change SMTP credentials if already configured. Startup via app.startup or Docker applies migrations automatically. The migration has already been applied to the current local database; other installations must apply it before running this version.
+
+## Verify templates without sending mail
+
+```powershell
+./.venv/Scripts/python.exe -m pytest tests
+# Optional real PostgreSQL relationship and event issuance checks:
+$env:LABTRACK_EMAIL_DB_TEST="1"
+$env:LABTRACK_EVENT_DB_TEST="1"
+./.venv/Scripts/python.exe -m pytest tests
+```
+
+The integration checks roll back all test records and do not run the email worker. SMTP is mocked in delivery tests. Live inbox rendering still needs verification through normal application actions after restart. Failures retain existing retry behavior and never log SMTP responses or message content.

@@ -12,7 +12,7 @@ LabTrack is a laboratory inventory and equipment borrowing platform for administ
 - View faculty and assistants in the admin user directory, with a separate student list.
 - Choose a department during registration: CE (Computer Engineering), CSE (Computer Science Engineering), IT (Information Technology), AIML (Artificial Intelligence and Machine Learning), or EC (Electronics and Communication). The selected database department determines the portal label; student ID codes are not used to guess it.
 - Display dates as `dd-mm-yyyy`. Student IDs support regular `24CE069` and D2D `D25CE150` formats; faculty, assistant, and lab examples are `FCE001`, `ASST001`, and `LAB-IOT`.
-- Optionally deliver notification emails using Gmail API or SMTP.
+- Optionally deliver notification emails using Gmail SMTP.
 
 ## Technology
 
@@ -90,7 +90,6 @@ BOOTSTRAP_ADMIN_EMAIL=your-admin@example.com
 BOOTSTRAP_ADMIN_NAME="System Administrator"
 BOOTSTRAP_ADMIN_PASSWORD=YOUR_PRIVATE_PASSWORD_AT_LEAST_12_CHARACTERS
 
-GMAIL_ENABLED=false
 SMTP_ENABLED=false
 ```
 
@@ -171,11 +170,11 @@ Demo emails include `admin@labtrack.edu`, `dmiller@charusat.ac.in`, `fee001@char
 
 Email delivery is not required to run either server. The configured sender is `labtrack23@gmail.com`. Gmail API delivery requires OAuth credentials and authorization before enabling it.
 
-Follow [Gmail API and SMTP setup](backend/MAIL_SETUP.md). Keep delivery disabled until setup is complete. Store credentials in the backend environment file, outside version control.
+Follow [Gmail SMTP setup](backend/MAIL_SETUP.md). Keep delivery disabled until setup is complete. Store credentials in the backend environment file, outside version control.
 
 ## Optional Docker setup
 
-Use the **root** `docker-compose.yml`. Copy `.env.example` to the root `.env` if it does not exist, then configure the database password, secret key, and optional bootstrap administrator there. Local backend commands read `backend\.env`; root Docker Compose reads the root `.env`.
+Use the **root** `docker-compose.yml`. Copy `.env.example` to the root `.env` if it does not exist, then configure the database password, secret key, and optional bootstrap administrator there. Local backend commands read `backend\.env`; Docker Compose loads the root `.env` followed by `backend\.env`, whose values take precedence.
 
 ```powershell
 Set-Location D:\PROJECTS\LABTRACK
@@ -226,7 +225,7 @@ To inspect or apply backend migrations, run from `backend`:
 | CORS error | Include the exact frontend origin in `ALLOWED_ORIGINS` and restart the backend. |
 | Port 5173 or 8000 already in use | Stop the previous server, or update the port and corresponding API / CORS settings. |
 | Administrator cannot sign in on a new database | Configure both bootstrap values, run `app.startup`, and use those credentials. There are no built-in default credentials. |
-| Gmail messages are not delivered | Complete OAuth setup and enable the selected provider as described in `backend/MAIL_SETUP.md`. |
+| Gmail messages are not delivered | Set SMTP_USER and a Google App Password in backend/.env, restart the backend, and run backend/check_smtp.py; see `backend/MAIL_SETUP.md`. |
 
 ## Project layout
 
@@ -239,7 +238,7 @@ LABTRACK/
 │   ├── alembic/             Database migrations
 │   ├── requirements.txt     Python dependencies
 │   ├── STARTUP.md           Database preparation and demo-seed details
-│   └── MAIL_SETUP.md        Gmail API and SMTP instructions
+│   └── MAIL_SETUP.md        Gmail SMTP instructions
 ├── audit-artifacts/         Verification scripts and audit reports
 ├── .env.example             Configuration template
 ├── docker-compose.yml       Optional complete container setup

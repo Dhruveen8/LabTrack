@@ -355,6 +355,8 @@ class NotificationEmail(Base):
     next_attempt_at = Column(DateTime(timezone=True), nullable=False, server_default=func.now())
     sent_at = Column(DateTime(timezone=True), nullable=True)
     failed = Column(Boolean, nullable=False, server_default=text("false"))
+    # References only; personal/equipment details are fetched when rendering.
+    email_context = Column(JSON, nullable=True)
 
 
 class Transfer(Base):

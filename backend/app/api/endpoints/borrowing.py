@@ -464,7 +464,8 @@ async def checkout_equipment(
         lab_id=req.lab_id,
         due_date=req.required_until,
         status=TransactionStatusEnum.ACTIVE,
-        is_quick_borrow=req.kind == RequestKindEnum.QUICK_BORROW
+        is_quick_borrow=req.kind == RequestKindEnum.QUICK_BORROW,
+        issued_by_id=current_user.id
     )
 
     db.add(transaction)
@@ -477,7 +478,8 @@ async def checkout_equipment(
         title="Equipment Checked Out",
         message=f"Asset {unit.asset_id} has been issued to you. Due on {req.required_until.strftime('%d-%m-%Y')}.",
         type=NotificationTypeEnum.INFO,
-        category=NotificationCategoryEnum.CHECKOUT
+        category=NotificationCategoryEnum.CHECKOUT,
+        email_context={'kind': 'issued', 'transaction_ids': [transaction.id]}
     )
     await db.commit()
 
@@ -627,11 +629,18 @@ async def quick_borrow(
         lab_id=unit.lab_id,
         due_date=end_of_today,
         status=TransactionStatusEnum.ACTIVE,
-        is_quick_borrow=True
+        is_quick_borrow=True,
+        issued_by_id=current_user.id
     )
     db.add(transaction)
     await db.commit()
     await db.refresh(transaction)
+    await create_notification(
+        db, transaction.borrower_id, 'Quick Borrow Equipment Issued',
+        f'Asset {unit.asset_id} has been issued to you. Please return it by the due time.',
+        NotificationTypeEnum.INFO, NotificationCategoryEnum.QUICK_BORROW,
+        email_context={'kind': 'issued', 'transaction_ids': [transaction.id]})
+    await db.commit()
     return transaction
 
 
@@ -791,7 +800,8 @@ async def walk_in_issue(
             lab_id=unit.lab_id,
             due_date=due_date,
             status=TransactionStatusEnum.ACTIVE,
-            issue_date=now
+            issue_date=now,
+            issued_by_id=current_user.id
         )
         db.add(transaction)
         unit.status = UnitStatusEnum.ISSUED
@@ -805,7 +815,8 @@ async def walk_in_issue(
             title="Walk-in Equipment Issued",
             message=f"Asset {unit.asset_id} was issued directly to you at the counter. Due on {due_date.strftime('%d-%m-%Y')}.",
             type=NotificationTypeEnum.INFO,
-            category=NotificationCategoryEnum.CHECKOUT
+            category=NotificationCategoryEnum.CHECKOUT,
+            email_context={'kind': 'issued', 'transaction_ids': [transaction.id]}
         )
         await db.commit()
 
@@ -887,6 +898,7 @@ async def issue_approved_event(event_req: EventIssueCreate, db: AsyncSession, cu
         await db.flush()
         requests_map[model_id] = req.id
 
+    issued_transactions = []
     for u in units:
         u.status = UnitStatusEnum.ISSUED
         tx = Transaction(
@@ -900,14 +912,17 @@ async def issue_approved_event(event_req: EventIssueCreate, db: AsyncSession, cu
             issued_by_id=current_user.id
         )
         db.add(tx)
+        issued_transactions.append(tx)
 
+    await db.flush()
     await create_notification(
         db=db,
         user_id=event_req.coordinator_id,
         title="Event Equipment Issued",
         message=f"Equipment for event '{event_issue.event_name}' was successfully issued. Due on {event_issue.due_date.strftime('%d-%m-%Y')}.",
         type=NotificationTypeEnum.INFO,
-        category=NotificationCategoryEnum.CHECKOUT
+        category=NotificationCategoryEnum.CHECKOUT,
+        email_context={'kind': 'issued', 'transaction_ids': [tx.id for tx in issued_transactions]}
     )
     await db.flush()
     return event_issue
