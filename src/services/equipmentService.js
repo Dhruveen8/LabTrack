@@ -17,7 +17,8 @@ export const equipmentService = {
       // Merge them into the format expected by the frontend
       return models.map(model => {
         const modelUnits = units.filter(u => u.model_id === model.id);
-        const availableCount = modelUnits.filter(u => u.status === 'AVAILABLE' && u.lab_id === model.lab_id).length;
+        const availableCount = modelUnits.filter(u => u.status === 'AVAILABLE').length;
+        const availableInHomeLab = modelUnits.filter(u => u.status === 'AVAILABLE' && u.lab_id === model.lab_id).length;
         const borrowedCount = modelUnits.filter(u => u.status === 'ISSUED').length;
         const lab = labs.find(l => l.id === model.lab_id) || {};
 
@@ -28,15 +29,17 @@ export const equipmentService = {
           labId: model.lab_id,
           labName: lab.name || 'Unknown Lab',
           description: model.description || '',
-          quantity: model.total_quantity,
+          quantity: modelUnits.length,
           availableQuantity: availableCount,
+          availableInHomeLab,
           borrowedQuantity: borrowedCount,
           status: availableCount > 0 ? 'Available' : 'Unavailable',
           condition: 'Mixed',
           units: modelUnits.map(u => ({
             assetId: u.asset_id,
             labId: u.lab_id,
-            status: u.status === 'AVAILABLE' ? 'Available' : (u.status === 'ISSUED' ? 'Issued' : u.status === 'RESERVED' ? 'Reserved' : u.status === 'IN_TRANSIT' ? 'In Transit' : 'Maintenance'),
+            labName: labs.find(l => l.id === u.lab_id)?.name || 'Unknown Lab',
+            status: { AVAILABLE: 'Available', ISSUED: 'Issued', RESERVED: 'Reserved', MAINTENANCE: 'Maintenance', IN_TRANSIT: 'In Transit', RETIRED: 'Retired' }[u.status] || u.status,
             condition: u.condition || 'Excellent',
             serialNumber: u.serial_number || u.asset_id,
             qrCodeUrl: u.qr_code_url

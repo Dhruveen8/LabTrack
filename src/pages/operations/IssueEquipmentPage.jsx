@@ -284,6 +284,7 @@ export const IssueEquipmentPage = () => {
           <BarcodeScanner
             onScan={handleScanBorrower}
             title="Scan Borrower University ID Card"
+            scanMode="id"
             placeholder="e.g. 24CE001"
           />
         </div>

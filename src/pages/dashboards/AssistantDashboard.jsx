@@ -6,6 +6,7 @@ import { StatCard } from '../../components/common/StatCard';
 import { DataTable } from '../../components/common/DataTable';
 import { StatusBadge } from '../../components/common/StatusBadge';
 import { Link } from 'react-router-dom';
+import { filterEquipmentByLabs } from '../../utils/equipmentInventory';
 import { QrCode, History, Plus, Upload, CheckCircle, Clock, AlertTriangle, FileText, Building2 } from 'lucide-react';
 
 export const AssistantDashboard = () => {
@@ -16,9 +17,7 @@ export const AssistantDashboard = () => {
   const assignedLabs = labsList.filter(l => assignedLabIds.includes(l.id));
 
   // Filter equipment & transactions by assigned labs
-  const myEquipment = assignedLabIds.length > 0
-    ? equipmentList.filter(e => assignedLabIds.includes(e.labId))
-    : equipmentList;
+  const myEquipment = filterEquipmentByLabs(equipmentList, assignedLabIds);
 
   const myTransactions = assignedLabIds.length > 0
     ? transactionsList.filter(t => assignedLabIds.includes(t.labId))

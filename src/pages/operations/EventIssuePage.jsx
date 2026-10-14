@@ -29,7 +29,8 @@ export const EventIssuePage = () => {
   const [reasons, setReasons] = useState({});
   const isFaculty = user?.role === 'faculty';
   const isAssistant = user?.role === 'assistant';
-  const labEquipment = equipmentList.filter(equipment => String(equipment.labId) === labId);
+  const labEquipment = equipmentList.filter(equipment => String(equipment.labId) === labId)
+    .map(model => ({ ...model, availableQuantity: model.availableInHomeLab }));
   const updateItem = (index, patch) => setItems(previous => previous.map((item, position) => position === index ? { ...item, ...patch } : item));
   const allocationItems = request => request.requested_items?.length ? request.requested_items :
     Object.entries((request.unit_asset_ids || []).reduce((counts, assetId) => {

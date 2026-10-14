@@ -14,7 +14,8 @@ export const RequestEquipmentPage = ({ quickBorrow = false }) => {
 const SingleRequestEquipmentPage = ({ quickBorrow = false }) => {
   const navigate = useNavigate();
   const { user } = useAuth();
-  const { equipmentList, createRequestAction, systemSettings } = useLabTrack();
+  const { equipmentList: inventoryEquipment, createRequestAction, systemSettings } = useLabTrack();
+  const equipmentList = inventoryEquipment.map(model => ({ ...model, availableQuantity: model.availableInHomeLab }));
 
   const userRole = user?.role || 'student';
   const isFaculty = userRole === 'faculty';

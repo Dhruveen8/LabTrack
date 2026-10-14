@@ -1,5 +1,5 @@
 import { useAuth, useToast } from './hooks';
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { departmentService } from '../services/departmentService';
 import { equipmentService } from '../services/equipmentService';
 import { labService } from '../services/labService';
@@ -9,6 +9,7 @@ import { notificationService } from '../services/notificationService';
 import { userService } from '../services/userService';
 import { settingsService } from '../services/settingsService';
 import { formatDate } from '../utils/dateFormat';
+import { getLabInventory } from '../utils/equipmentInventory';
 
 import { LabTrackContext } from './contextDefinitions';
 
@@ -23,6 +24,7 @@ export const LabTrackProvider = ({ children }) => {
   const [notificationsList, setNotificationsList] = useState([]);
   const [usersList, setUsersList] = useState([]);
   const [labAssignments, setLabAssignments] = useState([]);
+  const labsWithInventory = useMemo(() => getLabInventory(labsList, equipmentList), [labsList, equipmentList]);
   const [systemSettings, setSystemSettings] = useState({
     studentBorrowLimitDays: 14,
     facultyBorrowLimitDays: 30,
@@ -299,9 +301,16 @@ export const LabTrackProvider = ({ children }) => {
   };
 
   const deleteEquipment = async (id) => {
-    await equipmentService.delete(id);
-    setEquipmentList(prev => prev.filter(item => item.id !== id));
-    addToast('Equipment deleted', 'warning');
+    try {
+      await equipmentService.delete(id);
+      setEquipmentList(prev => prev.filter(item => item.id !== id));
+      addToast('Equipment deleted', 'success');
+      return true;
+    } catch (error) {
+      const detail = error.response?.data?.detail;
+      addToast(typeof detail === 'string' ? detail : 'Could not delete equipment. Please try again.', 'error');
+      return false;
+    }
   };
 
   // Club / Event Bulk Issue Action (Admin receives this notification)
@@ -509,7 +518,7 @@ export const LabTrackProvider = ({ children }) => {
       value={{
         departmentsList,
         equipmentList,
-        labsList,
+        labsList: labsWithInventory,
         requestsList,
         transfersList,
         transactionsList,
