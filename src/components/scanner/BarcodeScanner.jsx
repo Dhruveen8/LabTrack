@@ -1,48 +1,95 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { Html5QrcodeScanner } from 'html5-qrcode';
-import { Camera, CheckCircle2 } from 'lucide-react';
+import { Html5QrcodeScanner, Html5QrcodeSupportedFormats } from 'html5-qrcode';
+import { Camera, CheckCircle2, RotateCcw } from 'lucide-react';
+import { getScanBox } from '../../utils/scannerConfig';
 
-export const BarcodeScanner = ({ onScan, title = 'Scan Code', placeholder = 'Enter ID manually' }) => {
+export const BarcodeScanner = ({ onScan, title = 'Scan Code', placeholder = 'Enter ID manually', scanMode = 'equipment' }) => {
   const [manualInput, setManualInput] = useState('');
   const [scannedResult, setScannedResult] = useState(null);
   const scannerRef = useRef(null);
+  const onScanRef = useRef(onScan);
+  const stopScannerRef = useRef(() => Promise.resolve());
+  const cleanupRef = useRef(Promise.resolve());
+  const [scanAttempt, setScanAttempt] = useState(0);
+
+  useEffect(() => {
+    onScanRef.current = onScan;
+  }, [onScan]);
 
   useEffect(() => {
     // Generate a unique ID for the scanner container to allow multiple instances
     const scannerId = `qr-reader-${Math.random().toString(36).substr(2, 9)}`;
     if (!scannerRef.current) return;
-    scannerRef.current.id = scannerId;
 
-    const html5QrcodeScanner = new Html5QrcodeScanner(
-      scannerId,
-      { fps: 10, qrbox: { width: 250, height: 250 }, rememberLastUsedCamera: true },
-      /* verbose= */ false
-    );
-
-    const handleScanSuccess = (decodedText) => {
-      setScannedResult(decodedText);
-      html5QrcodeScanner.clear(); // Stop scanning after success
-      if (onScan) onScan(decodedText);
+    let cancelled = false;
+    let accepted = false;
+    let html5QrcodeScanner;
+    let clearPromise;
+    const stop = () => {
+      if (!html5QrcodeScanner) return Promise.resolve();
+      if (!clearPromise) {
+        clearPromise = html5QrcodeScanner.clear().catch(error => {
+          console.error('Failed to clear barcode scanner.', error);
+        });
+      }
+      return clearPromise;
     };
 
-    const handleScanFailure = (_error) => {
-      // Ignored: html5-qrcode continuously fires this while seeking a barcode
-    };
+    // Await the previous camera teardown before mounting another scanner.
+    cleanupRef.current.then(() => {
+      if (cancelled) return;
+      scannerRef.current.id = scannerId;
+      html5QrcodeScanner = new Html5QrcodeScanner(
+        scannerId,
+        {
+          fps: 10,
+          qrbox: (width, height) => getScanBox(width, height, scanMode),
+          ...(scanMode === 'id' ? { formatsToSupport: [
+            Html5QrcodeSupportedFormats.CODE_128,
+            Html5QrcodeSupportedFormats.CODE_39,
+            Html5QrcodeSupportedFormats.CODE_93,
+            Html5QrcodeSupportedFormats.QR_CODE,
+          ] } : {}),
+          rememberLastUsedCamera: true,
+          showTorchButtonIfSupported: true,
+          showZoomSliderIfSupported: true,
+        },
+        /* verbose= */ false
+      );
 
-    html5QrcodeScanner.render(handleScanSuccess, handleScanFailure);
+      const handleScanSuccess = (decodedText) => {
+        const value = decodedText.trim();
+        if (cancelled || accepted || !value) return;
+        accepted = true;
+        setScannedResult(value);
+        cleanupRef.current = stop();
+        onScanRef.current?.(value);
+      };
+
+      const handleScanFailure = (_error) => {
+        // Ignored: html5-qrcode continuously fires this while seeking a barcode
+      };
+
+      html5QrcodeScanner.render(handleScanSuccess, handleScanFailure);
+      stopScannerRef.current = () => {
+        accepted = true;
+        cleanupRef.current = stop();
+        return cleanupRef.current;
+      };
+    });
 
     return () => {
-      html5QrcodeScanner.clear().catch(error => {
-        console.error("Failed to clear html5QrcodeScanner. ", error);
-      });
+      cancelled = true;
+      cleanupRef.current = stop();
     };
-  }, [onScan]);
+  }, [scanMode, scanAttempt]);
 
   const handleManualSubmit = (e) => {
     e.preventDefault();
     if (manualInput.trim()) {
       setScannedResult(manualInput.trim());
-      if (onScan) onScan(manualInput.trim());
+      stopScannerRef.current();
+      onScanRef.current?.(manualInput.trim());
     }
   };
 
@@ -67,15 +114,22 @@ export const BarcodeScanner = ({ onScan, title = 'Scan Code', placeholder = 'Ent
             color: '#4ade80'
           }}>
             <CheckCircle2 size={48} style={{ margin: '0 auto 8px' }} />
-            <div style={{ fontSize: '1rem', fontWeight: 700 }}>Scanned: {scannedResult}</div>
+            <div style={{ fontSize: '1rem', fontWeight: 700, overflowWrap: 'anywhere', maxWidth: '100%', padding: '0 1rem' }}>Scanned: {scannedResult}</div>
+            <button type="button" className="btn btn-secondary btn-sm" title="Scan again" style={{ marginTop: '1rem' }} onClick={async () => {
+              await cleanupRef.current;
+              setScannedResult(null);
+              setManualInput('');
+              setScanAttempt(attempt => attempt + 1);
+            }}>
+              <RotateCcw size={14} /> Scan Again
+            </button>
           </div>
-        ) : (
-          <div ref={scannerRef} style={{ width: '100%', overflow: 'hidden', borderRadius: '6px' }}></div>
-        )}
+        ) : null}
+        <div ref={scannerRef} style={{ display: scannedResult ? 'none' : 'block', width: '100%', overflow: 'hidden', borderRadius: '6px' }}></div>
       </div>
 
       {/* Manual Entry Fallback */}
-      <form onSubmit={handleManualSubmit} style={{ display: 'flex', gap: '0.5rem' }}>
+      <form onSubmit={handleManualSubmit} style={{ display: 'flex', flexWrap: 'wrap', gap: '0.5rem' }}>
         <input
           type="text"
           className="form-control"

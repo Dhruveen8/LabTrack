@@ -132,17 +132,17 @@ async def delete_equipment_model(
     if active_check.scalars().first():
         raise HTTPException(status_code=400, detail="Cannot delete model with active transactions")
 
-    # Delete all units first, then the model
-    units_result = await db.execute(select(EquipmentUnit).where(EquipmentUnit.model_id == model_id))
-    for unit in units_result.scalars().all():
-        await db.delete(unit)
-
-    await db.delete(eq_model)
     try:
+        units_result = await db.execute(select(EquipmentUnit).where(EquipmentUnit.model_id == model_id))
+        for unit in units_result.scalars().all():
+            await db.delete(unit)
+        # No ORM relationship orders these deletes; satisfy the RESTRICT foreign key first.
+        await db.flush()
+        await db.delete(eq_model)
         await db.commit()
     except IntegrityError:
         await db.rollback()
-        raise HTTPException(status_code=409, detail='Cannot delete equipment with borrowing or transfer history')
+        raise HTTPException(status_code=409, detail='Cannot delete equipment with request, borrowing, or transfer history')
     return {"message": "Equipment model and its units deleted successfully"}
 
 @router.post("/units", response_model=EquipmentUnitResponse)

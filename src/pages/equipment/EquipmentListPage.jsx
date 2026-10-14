@@ -4,6 +4,8 @@ import { PageHeader } from '../../components/common/PageHeader';
 import { DataTable } from '../../components/common/DataTable';
 import { StatusBadge } from '../../components/common/StatusBadge';
 import { QRPrintSheet } from '../../components/scanner/QRPrintSheet';
+import { ConfirmationModal } from '../../components/common/ConfirmationModal';
+import { filterEquipmentByLabs } from '../../utils/equipmentInventory';
 import { Link } from 'react-router-dom';
 import { Plus, Upload, Eye, Trash2, Printer, Layers, QrCode } from 'lucide-react';
 
@@ -15,17 +17,19 @@ export const EquipmentListPage = () => {
   const [viewMode, setViewMode] = useState('MODELS'); // 'MODELS' | 'UNITS'
   const [showPrintSheet, setShowPrintSheet] = useState(false);
   const [printUnits, setPrintUnits] = useState([]);
+  const [equipmentToDelete, setEquipmentToDelete] = useState(null);
+  const [deletingId, setDeletingId] = useState(null);
 
   const isAssistant = user?.role === 'assistant';
+  const isAdmin = user?.role === 'admin';
   const assignedLabIds = user?.assignedLabIds || [];
 
   // Filter equipment
-  let filteredList = equipmentList;
-  if (isAssistant && assignedLabIds.length > 0 && selectedLabId === 'ALL') {
-    filteredList = equipmentList.filter(e => assignedLabIds.includes(e.labId));
-  } else if (selectedLabId !== 'ALL') {
-    filteredList = equipmentList.filter(e => e.labId === selectedLabId);
-  }
+  const visibleLabs = isAssistant ? labsList.filter(lab => assignedLabIds.includes(lab.id)) : labsList;
+  const scopedLabIds = selectedLabId === 'ALL'
+    ? (isAssistant ? assignedLabIds : null)
+    : visibleLabs.filter(lab => String(lab.id) === selectedLabId).map(lab => lab.id);
+  const filteredList = filterEquipmentByLabs(equipmentList, scopedLabIds);
 
   // Build flattened units list if in 'UNITS' mode
   const allUnitsList = [];
@@ -37,8 +41,8 @@ export const EquipmentListPage = () => {
           modelId: eq.id,
           modelName: eq.name,
           category: eq.category,
-          labName: eq.labName,
-          labId: eq.labId
+          labName: u.labName,
+          labId: u.labId
         });
       });
     }
@@ -58,6 +62,15 @@ export const EquipmentListPage = () => {
     });
     setPrintUnits(unitsToPrint);
     setShowPrintSheet(true);
+  };
+
+  const handleDelete = async (row) => {
+    setDeletingId(row.id);
+    try {
+      await deleteEquipment(row.id);
+    } finally {
+      setDeletingId(null);
+    }
   };
 
   const modelColumns = [
@@ -100,8 +113,8 @@ export const EquipmentListPage = () => {
           >
             <Printer size={13} /> QR
           </button>
-          {isAssistant && (
-            <button className="btn btn-danger btn-sm" title="Delete" onClick={() => deleteEquipment(row.id)}>
+          {isAdmin && (
+            <button className="btn btn-danger btn-sm" title="Delete equipment" aria-label={`Delete ${row.name}`} disabled={deletingId !== null} onClick={() => setEquipmentToDelete(row)}>
               <Trash2 size={13} />
             </button>
           )}
@@ -183,7 +196,7 @@ export const EquipmentListPage = () => {
             onChange={(e) => setSelectedLabId(e.target.value)}
           >
             <option value="ALL">All Managed Laboratories</option>
-            {labsList.map(lab => (
+            {visibleLabs.map(lab => (
               <option key={lab.id} value={lab.id}>{lab.name} ({lab.id})</option>
             ))}
           </select>
@@ -214,6 +227,16 @@ export const EquipmentListPage = () => {
           <DataTable columns={unitColumns} data={allUnitsList} />
         )}
       </div>
+
+      <ConfirmationModal
+        isOpen={equipmentToDelete !== null}
+        onClose={() => setEquipmentToDelete(null)}
+        onConfirm={() => handleDelete(equipmentToDelete)}
+        title="Delete Equipment"
+        message={`Delete ${equipmentToDelete?.name || ''} and all its units? This cannot be undone.`}
+        confirmText="Delete"
+        confirmVariant="danger"
+      />
 
       {showPrintSheet && (
         <QRPrintSheet

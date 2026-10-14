@@ -1,11 +1,14 @@
 import { formatDate } from '../../utils/dateFormat';
 import React, { useState, useEffect } from 'react';
 import { PageHeader } from '../../components/common/PageHeader';
-import { Zap, QrCode, UserCheck, ArrowLeftRight, Clock, AlertTriangle, CheckCircle } from 'lucide-react';
+import { Zap, QrCode, UserCheck, ArrowLeftRight, Clock, AlertTriangle, CheckCircle, Camera } from 'lucide-react';
+import { BarcodeScanner } from '../../components/scanner/BarcodeScanner';
+import { Modal } from '../../components/common/Modal';
 import apiClient from '../../api/client';
 
 export const QuickBorrowPage = () => {
   const [studentId, setStudentId] = useState('');
+  const [showIdScanner, setShowIdScanner] = useState(false);
   const [assetId, setAssetId] = useState('');
   const [step, setStep] = useState(1); // 1 = scan student, 2 = scan equipment
   const [message, setMessage] = useState(null);
@@ -137,6 +140,13 @@ export const QuickBorrowPage = () => {
       )}
 
       {/* Borrow Flow */}
+      <Modal isOpen={showIdScanner && mode === 'borrow'} onClose={() => setShowIdScanner(false)} title="Scan Faculty ID Card">
+        <BarcodeScanner scanMode="id" title="Faculty ID Card" placeholder="Faculty ID" onScan={code => {
+          setStudentId(code);
+          setStep(2);
+          setShowIdScanner(false);
+        }} />
+      </Modal>
       {mode === 'borrow' && (
         <div className="portal-card">
           <div className="portal-header">
@@ -159,6 +169,9 @@ export const QuickBorrowPage = () => {
                   autoFocus
                   style={{ fontSize: '1.1rem', fontFamily: 'monospace', fontWeight: 700 }}
                 />
+                <button type="button" className="btn btn-secondary btn-sm" title="Scan faculty ID card" style={{ marginTop: '0.5rem' }} onClick={() => setShowIdScanner(true)}>
+                  <Camera size={14} /> Scan ID Card
+                </button>
               </div>
               <div className="form-group">
                 <label className="form-label">
