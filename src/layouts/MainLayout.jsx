@@ -100,7 +100,7 @@ export const MainLayout = ({ children }) => {
         { label: 'Browse Equipment', path: '/browse-equipment', icon: Search },
         { label: 'Request Equipment', path: '/request-equipment', icon: Send },
         { label: 'My Borrowings', path: '/transactions', icon: BookOpen },
-        { label: 'My Requests', path: '/requests', icon: FileSpreadsheet },
+        { label: 'Requests & Approvals', path: '/requests', icon: FileSpreadsheet },
         { label: 'Quick Borrow', path: '/quick-borrow', icon: Zap },
         { label: 'Event / Club Requests', path: '/event-issue', icon: CalendarCheck },
         { label: 'Inter-Lab Requests', path: '/inter-lab-transfers', icon: ArrowRightLeft },
@@ -170,13 +170,9 @@ export const MainLayout = ({ children }) => {
               aria-label="Toggle navigation"
               aria-expanded={mobileMenuOpen}
               style={{
-                display: 'none',
-                background: 'none',
-                border: 'none',
-                color: '#fff',
-                cursor: 'pointer'
+                display: 'none'
               }}
-              className="mobile-toggle-btn"
+              className="btn btn-inverse btn-icon mobile-toggle-btn"
             >
               {mobileMenuOpen ? <X size={22} /> : <Menu size={22} />}
             </button>
@@ -200,16 +196,12 @@ export const MainLayout = ({ children }) => {
             {/* Notification Bell */}
             <div style={{ position: 'relative' }}>
               <button
+                type="button"
+                className="btn btn-inverse btn-icon"
+                aria-label="Notifications"
+                aria-expanded={showNotifications}
                 onClick={() => setShowNotifications(!showNotifications)}
                 style={{
-                  background: 'none',
-                  border: 'none',
-                  color: '#ffffff',
-                  cursor: 'pointer',
-                  padding: '6px',
-                  display: 'flex',
-                  alignItems: 'center',
-                  borderRadius: '4px',
                   position: 'relative'
                 }}
               >
@@ -249,20 +241,15 @@ export const MainLayout = ({ children }) => {
                   {user?.name || 'Portal User'}
                 </div>
                 <div style={{ fontSize: '0.7rem', color: '#cbd5e1', textTransform: 'capitalize' }}>
-                  Role: <span style={{ color: '#93c5fd', fontWeight: 600 }}>{user?.role || 'Guest'}</span>
+                  Role: <span style={{ color: '#93c5fd', fontWeight: 600 }}>{user?.is_hod ? 'HOD' : user?.role || 'Guest'}</span>
                 </div>
               </div>
 
               <button
                 onClick={handleLogout}
                 title="Logout"
-                className="btn btn-sm"
-                style={{
-                  backgroundColor: 'rgba(255,255,255,0.1)',
-                  color: '#ffffff',
-                  border: '1px solid rgba(255,255,255,0.2)',
-                  padding: '6px'
-                }}
+                aria-label="Logout"
+                className="btn btn-inverse btn-icon"
               >
                 <LogOut size={16} />
               </button>

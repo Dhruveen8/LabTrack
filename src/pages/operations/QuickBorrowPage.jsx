@@ -192,7 +192,7 @@ export const QuickBorrowPage = () => {
               type="submit"
               className="btn btn-primary"
               disabled={!studentId || !assetId}
-              style={{ width: '100%', padding: '0.75rem', fontSize: '1rem' }}
+              style={{ width: '100%' }}
             >
               <Zap size={16} /> Issue Item Instantly
             </button>
@@ -227,7 +227,7 @@ export const QuickBorrowPage = () => {
               type="submit"
               className="btn btn-primary"
               disabled={!assetId}
-              style={{ width: '100%', padding: '0.75rem', fontSize: '1rem' }}
+              style={{ width: '100%' }}
             >
               <ArrowLeftRight size={16} /> Return Item
             </button>

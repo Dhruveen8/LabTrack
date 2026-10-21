@@ -15,6 +15,7 @@ export const LabsListPage = () => {
 
   const [newLabData, setNewLabData] = useState({
     name: '',
+    code: '',
     departmentId: departmentsList[0]?.id || '',
     location: '',
     description: '',
@@ -41,6 +42,7 @@ export const LabsListPage = () => {
 
     const newLab = await addLab({
       ...newLabData,
+      departmentId: newLabData.departmentId || departmentsList[0]?.id,
       departmentName: selectedDept ? selectedDept.name : ''
     });
 
@@ -51,6 +53,7 @@ export const LabsListPage = () => {
     setShowAddLabModal(false);
     setNewLabData({
       name: '',
+      code: '',
       departmentId: departmentsList[0]?.id || '',
       location: '',
       description: '',
@@ -73,7 +76,7 @@ export const LabsListPage = () => {
   const openAssignModal = (lab) => {
     setTargetLab(lab);
     const assignment = labAssignments?.find(a => a.lab_id === lab.id);
-    setSelectedAssistantId(assignment?.assistant_id || assistants[0]?.id || null);
+    setSelectedAssistantId(assignment?.assistant_id || assistants.find(assistant => assistant.departmentId === lab.department_id)?.id || null);
     setShowAssignModal(true);
   };
 
@@ -162,7 +165,6 @@ export const LabsListPage = () => {
                   {isAdmin && (
                     <button
                       className="btn btn-secondary btn-sm"
-                      style={{ fontSize: '0.7rem', padding: '2px 8px' }}
                       onClick={() => openAssignModal(lab)}
                     >
                       <UserPlus size={12} /> Assign
@@ -203,10 +205,15 @@ export const LabsListPage = () => {
           <div className="portal-card" style={{ width: '100%', maxWidth: '600px', margin: 0 }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.25rem' }}>
               <h3 style={{ fontSize: '1.15rem', fontWeight: 700, margin: 0 }}>Register New Department Laboratory</h3>
-              <button className="btn btn-secondary btn-sm" onClick={() => setShowAddLabModal(false)}><X size={16} /></button>
+              <button type="button" className="btn btn-secondary btn-icon" aria-label="Close laboratory dialog" onClick={() => setShowAddLabModal(false)}><X size={16} /></button>
             </div>
 
             <form onSubmit={handleCreateLab}>
+              <div className="form-group"><label className="form-label" htmlFor="new-lab-code">Laboratory Code</label>
+                <input id="new-lab-code" className="form-control" value={newLabData.code} required pattern="[A-Za-z0-9]{2,16}"
+                  placeholder="e.g. CEL3" minLength={2} maxLength={16}
+                  onChange={event => setNewLabData({ ...newLabData, code: event.target.value.toUpperCase() })} />
+              </div>
               <div className="form-group">
                 <label className="form-label">Laboratory Name</label>
                 <input
@@ -224,8 +231,8 @@ export const LabsListPage = () => {
                   <label className="form-label">Parent Department</label>
                   <select
                     className="form-select"
-                    value={newLabData.departmentId}
-                    onChange={(e) => setNewLabData({ ...newLabData, departmentId: e.target.value })}
+                    value={newLabData.departmentId || departmentsList[0]?.id || ''}
+                    onChange={(e) => setNewLabData({ ...newLabData, departmentId: e.target.value, assistantId: null })}
                   >
                     {departmentsList.map(d => (
                       <option key={d.id} value={d.id}>{d.name} ({d.code})</option>
@@ -240,7 +247,8 @@ export const LabsListPage = () => {
                     value={newLabData.assistantId}
                     onChange={(e) => setNewLabData({ ...newLabData, assistantId: e.target.value })}
                   >
-                    {assistants.map(a => (
+                    <option value="">Assign later</option>
+                    {assistants.filter(a => a.departmentId === Number(newLabData.departmentId || departmentsList[0]?.id)).map(a => (
                       <option key={a.id} value={a.id}>{a.name} ({a.displayId || a.universityId || a.id})</option>
                     ))}
                   </select>
@@ -289,7 +297,7 @@ export const LabsListPage = () => {
           <div className="portal-card" style={{ width: '100%', maxWidth: '500px', margin: 0 }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.25rem' }}>
               <h3 style={{ fontSize: '1.15rem', fontWeight: 700, margin: 0 }}>Assign Lab Assistant</h3>
-              <button className="btn btn-secondary btn-sm" onClick={() => setShowAssignModal(false)}><X size={16} /></button>
+              <button type="button" className="btn btn-secondary btn-icon" aria-label="Close assistant assignment dialog" onClick={() => setShowAssignModal(false)}><X size={16} /></button>
             </div>
 
             <div style={{ marginBottom: '1rem', backgroundColor: '#f8fafc', padding: '0.75rem', borderRadius: '6px' }}>
@@ -306,7 +314,8 @@ export const LabsListPage = () => {
                   value={selectedAssistantId}
                   onChange={(e) => setSelectedAssistantId(e.target.value)}
                 >
-                  {assistants.map(a => (
+                  <option value="">Select an assistant</option>
+                  {assistants.filter(a => a.departmentId === targetLab.department_id).map(a => (
                     <option key={a.id} value={a.id}>
                       {a.name} ({a.department || 'Department'}) — Currently manages {(a.assignedLabIds || []).length} labs
                     </option>

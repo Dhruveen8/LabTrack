@@ -86,7 +86,7 @@ export const EventIssuePage = () => {
       setError('Enter a reason before rejecting the request.');
       return;
     }
-    const assets = request.requested_items?.length ? (allocations[request.id] || []) : request.unit_asset_ids;
+    const assets = request.unit_asset_ids;
     if (approve && allocationItems(request).some(item => {
       const model = equipmentList.find(equipment => equipment.id === item.model_id);
       return assets.filter(asset => model?.units?.some(unit => unit.assetId === asset)).length !== item.quantity;
@@ -98,9 +98,12 @@ export const EventIssuePage = () => {
     setWorking(true);
     setError('');
     try {
-      if (approve) await requestService.approveEventRequest(request.id, assets);
+      if (user.is_hod && request.hod_id === user.id && !request.hod_approved_at) {
+        await requestService.reviewEventAsHod(request.id, approve, reasons[request.id]);
+      }
+      else if (approve) await requestService.approveEventRequest(request.id, assets);
       else await requestService.rejectEventRequest(request.id, reasons[request.id]);
-      addToast(approve ? 'Event request approved and equipment issued.' : 'Event request rejected.', 'success');
+      addToast(approve ? 'Event approval recorded.' : 'Event request rejected.', 'success');
       await Promise.all([loadRequests(), refreshData()]);
     } catch (failure) {
       setError(errorMessage(failure));
@@ -112,7 +115,7 @@ export const EventIssuePage = () => {
 
   return <div>
     <PageHeader title="Event / Club Equipment Requests"
-      subtitle={isFaculty ? 'Choose a lab, equipment types and quantities. The lab assistant allocates the specific units.' : 'Allocate available units and issue them to the faculty coordinator for the club or event.'} />
+      subtitle="Equipment is reserved at submission. Faculty club requests require department HOD approval before assistant issue. HOD requests go directly to the assistant." />
     {error && <div role="alert" className="portal-card" style={{ color: '#b91c1c' }}>{error}</div>}
     {isFaculty && <form className="portal-card" onSubmit={submit}>
       <div className="form-group"><label className="form-label" htmlFor="event-name">Club / Event Name</label>
@@ -129,7 +132,7 @@ export const EventIssuePage = () => {
           <option value="">Select a lab</option>
           {labsList.map(lab => <option key={lab.id} value={lab.id}>{lab.name}</option>)}
         </select></div>
-      <p>Availability is checked again when the assistant allocates the units.</p>
+      <p>All requested equipment will be reserved together on submission.</p>
       {items.map((item, index) => {
         const model = labEquipment.find(equipment => String(equipment.id) === item.modelId);
         return <div key={index} style={{ display: 'flex', flexWrap: 'wrap', gap: '0.5rem', alignItems: 'end', marginBottom: '1rem' }}>
@@ -143,21 +146,21 @@ export const EventIssuePage = () => {
             </select></div>
           <div><label className="form-label" htmlFor={`event-quantity-${index}`}>Quantity</label>
             <div style={{ display: 'flex', gap: '0.25rem' }}>
-              <button type="button" className="btn btn-secondary" aria-label={`Decrease quantity ${index + 1}`} disabled={working || item.quantity <= 1}
+              <button type="button" className="btn btn-secondary btn-icon" aria-label={`Decrease quantity ${index + 1}`} disabled={working || item.quantity <= 1}
                 onClick={() => updateItem(index, { quantity: item.quantity - 1 })}><Minus size={16} /></button>
               <input id={`event-quantity-${index}`} type="number" className="form-control" style={{ width: '80px' }} min="1" max={Math.min(model?.availableQuantity || 1, 1000)}
                 value={item.quantity} disabled={!model || working} required onChange={event => updateItem(index, { quantity: Number(event.target.value) })} />
-              <button type="button" className="btn btn-secondary" aria-label={`Increase quantity ${index + 1}`} disabled={!model || working || item.quantity >= Math.min(model.availableQuantity, 1000)}
+              <button type="button" className="btn btn-secondary btn-icon" aria-label={`Increase quantity ${index + 1}`} disabled={!model || working || item.quantity >= Math.min(model.availableQuantity, 1000)}
                 onClick={() => updateItem(index, { quantity: item.quantity + 1 })}><Plus size={16} /></button>
             </div></div>
-          <button type="button" className="btn btn-secondary" aria-label={`Remove equipment ${index + 1}`} disabled={working || items.length === 1}
+          <button type="button" className="btn btn-secondary btn-icon" aria-label={`Remove equipment ${index + 1}`} disabled={working || items.length === 1}
             onClick={() => setItems(previous => previous.filter((_, position) => position !== index))}><Trash2 size={16} /></button>
         </div>;
       })}
       {labId && !labEquipment.length && <p>No equipment is registered in this lab.</p>}
       <button type="button" className="btn btn-secondary" disabled={working || !labId || items.length >= labEquipment.filter(model => model.availableQuantity > 0).length}
         onClick={() => setItems(previous => [...previous, { modelId: '', quantity: 1 }])}><Plus size={16} /> Add Equipment</button>
-      <button className="btn btn-primary" type="submit" disabled={working} style={{ marginLeft: '0.5rem' }}><Send size={16} /> {working ? 'Submitting…' : 'Submit for Assistant Approval'}</button>
+      <button className="btn btn-primary" type="submit" disabled={working} style={{ marginLeft: '0.5rem' }}><Send size={16} /> {working ? 'Submitting…' : user.is_hod ? 'Submit to Assistant' : 'Submit for HOD Approval'}</button>
     </form>}
     <div className="portal-card">
       <h3>{isFaculty ? 'My Event Requests' : 'Event Requests'}</h3>
@@ -168,8 +171,9 @@ export const EventIssuePage = () => {
         <p>Equipment: {allocationItems(request).map(item => `${equipmentList.find(model => model.id === item.model_id)?.name || `Equipment ${item.model_id}`} × ${item.quantity}`).join(', ') || 'See allocated assets'}</p>
         {!!request.unit_asset_ids?.length && <p>Assets: {request.unit_asset_ids.join(', ')}</p>}
         {request.rejection_reason && <p>Reason: {request.rejection_reason}</p>}
-        {isAssistant && request.status === 'PENDING' && <div>
-          {!!request.requested_items?.length && allocationItems(request).map(item => {
+        <p>Stage: {request.status !== 'PENDING' ? request.status : request.hod_id && !request.hod_approved_at ? 'HOD approval' : 'Assistant approval and issue'}</p>
+        {(isAssistant && (!request.hod_id || request.hod_approved_at) || user.is_hod && request.hod_id === user.id && !request.hod_approved_at) && request.status === 'PENDING' && <div>
+          {isAssistant && !request.unit_asset_ids?.length && !!request.requested_items?.length && allocationItems(request).map(item => {
             const model = equipmentList.find(equipment => equipment.id === item.model_id);
             const availableUnits = model?.units?.filter(unit => unit.status === 'Available' && unit.labId === request.lab_id) || [];
             const selected = allocations[request.id] || [];
@@ -184,7 +188,7 @@ export const EventIssuePage = () => {
               </label>)}</div>
             </fieldset>;
           })}
-          <button className="btn btn-primary" disabled={working} onClick={() => decide(request, true)}><CheckCircle2 size={16} /> Approve &amp; Issue</button>
+          <button className="btn btn-primary" disabled={working} onClick={() => decide(request, true)}><CheckCircle2 size={16} /> {isAssistant ? 'Approve & Issue' : 'Approve for Assistant'}</button>
           <input className="form-control" aria-label={`Rejection reason for request ${request.id}`} placeholder="Reason if rejecting" value={reasons[request.id] || ''}
             onChange={event => setReasons(previous => ({ ...previous, [request.id]: event.target.value }))} style={{ margin: '0.5rem 0' }} />
           <button className="btn btn-danger" disabled={working} onClick={() => decide(request, false)}><XCircle size={16} /> Reject</button>

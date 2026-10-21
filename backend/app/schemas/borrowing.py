@@ -5,6 +5,7 @@ from app.db.models import RequestStatusEnum, TransactionStatusEnum, RequestKindE
 
 # Request Schemas
 class RequestBase(BaseModel):
+    faculty_id: Optional[int] = Field(default=None, gt=0)
     model_id: int
     required_from: datetime
     required_until: datetime
@@ -26,6 +27,8 @@ class CartSelection(CartQuantity):
 
 
 class CartSubmit(BaseModel):
+    faculty_id: int = Field(gt=0)
+    kind: RequestKindEnum = RequestKindEnum.STANDARD
     items: list[CartSelection] = Field(min_length=1, max_length=100)
     required_from: datetime
     required_until: datetime
@@ -41,6 +44,11 @@ class CartSubmit(BaseModel):
 
 
 class RequestItemResponse(BaseModel):
+    assistant_id: Optional[int] = None
+    assistant_name: Optional[str] = None
+    requires_hod_approval: bool = False
+    approval_stage: str = 'ASSISTANT'
+    collection_deadline: Optional[datetime] = None
     id: int
     model_id: int
     equipment_name: str
@@ -53,6 +61,14 @@ class RequestItemResponse(BaseModel):
     reserved_asset_ids: list[str] = Field(default_factory=list)
 
 class RequestResponse(RequestBase):
+    created_at: Optional[datetime] = None
+    hod_id: Optional[int] = None
+    faculty_name: Optional[str] = None
+    hod_name: Optional[str] = None
+    faculty_approved_at: Optional[datetime] = None
+    hod_approved_at: Optional[datetime] = None
+    approval_deadline: Optional[datetime] = None
+    approval_history: list[dict] = Field(default_factory=list)
     id: int
     requester_id: int
     requester_name: Optional[str] = None

@@ -255,7 +255,7 @@ export const RegisterPage = () => {
             </div>
 
             <button type="submit" className="btn btn-primary" disabled={departmentsLoading || !!departmentsError}
-              style={{ width: '100%', padding: '0.65rem', marginBottom: '1rem' }}>
+              style={{ width: '100%', marginBottom: '1rem' }}>
               Register Account <ArrowRight size={16} />
             </button>
 

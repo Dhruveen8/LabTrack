@@ -11,7 +11,7 @@ def test_cart_quantity_is_a_bounded_strict_integer(quantity):
 
 
 def body(items):
-    return dict(items=items, required_from='2027-01-01T09:00:00+05:30',
+    return dict(items=items, faculty_id=1, required_from='2027-01-01T09:00:00+05:30',
                 required_until='2027-01-02T09:00:00+05:30', purpose='Coursework', submission_key=str(uuid4()))
 
 

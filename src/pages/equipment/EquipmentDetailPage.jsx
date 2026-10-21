@@ -1,4 +1,6 @@
-import { useLabTrack, useAuth } from '../../context/hooks';
+import { useLabTrack, useAuth, useToast } from '../../context/hooks';
+import apiClient from '../../api/client';
+import { cartError } from '../../utils/cart';
 import React, { useState } from 'react';
 import { useParams, Link } from 'react-router-dom';
 import { PageHeader } from '../../components/common/PageHeader';
@@ -9,7 +11,9 @@ import { ArrowLeft, Printer } from 'lucide-react';
 
 export const EquipmentDetailPage = () => {
   const { id } = useParams();
-  const { equipmentList, loading } = useLabTrack();
+  const { equipmentList, loading, refreshData } = useLabTrack();
+  const { addToast } = useToast();
+  const [savingApproval, setSavingApproval] = useState(false);
   const { user } = useAuth();
   // --- NR-1: Only admin/assistant can print QR ---
   const canPrintQR = user?.role === 'admin' || user?.role === 'assistant';
@@ -103,6 +107,15 @@ export const EquipmentDetailPage = () => {
             <div><strong>Model Status:</strong> <StatusBadge status={item.status} /></div>
           </div>
           <div style={{ marginTop: '1.25rem', paddingTop: '1rem', borderTop: '1px solid #e2e8f0' }}>
+            <p>HOD approval: <strong>{item.requiresHodApproval ? 'Required' : 'Not required'}</strong></p>
+            {user?.role === 'assistant' && user.assignedLabIds?.includes(item.labId) && <label>
+              <input type="checkbox" checked={!!item.requiresHodApproval} disabled={savingApproval} onChange={async event => {
+                setSavingApproval(true);
+                try { await apiClient.put(`/inventory/models/${item.id}`, { requires_hod_approval: event.target.checked }); await refreshData(); }
+                catch (error) { addToast(cartError(error), 'error'); }
+                finally { setSavingApproval(false); }
+              }} /> Requires HOD approval for new requests
+            </label>}
             <strong>Description:</strong>
             <p style={{ marginTop: '0.25rem', color: '#64748b' }}>{item.description || 'Standard university laboratory asset.'}</p>
           </div>

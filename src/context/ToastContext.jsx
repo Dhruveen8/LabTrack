@@ -52,12 +52,11 @@ export const ToastProvider = ({ children }) => {
           >
             <span>{toast.message}</span>
             <button
+              type="button"
+              className="btn btn-inverse btn-icon"
+              aria-label="Dismiss notification"
               onClick={() => removeToast(toast.id)}
               style={{
-                background: 'none',
-                border: 'none',
-                color: '#fff',
-                cursor: 'pointer',
                 marginLeft: '12px',
                 fontWeight: 'bold'
               }}

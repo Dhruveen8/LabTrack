@@ -44,6 +44,7 @@ class UserRegistration(UserCreate):
 
 
 class UserUpdate(BaseModel):
+    is_hod: Optional[bool] = None
     email: Optional[EmailStr] = None
     name: Optional[str] = None
     role: Optional[RoleEnum] = None
@@ -62,6 +63,7 @@ class UserUpdate(BaseModel):
         return self
 
 class UserInDBBase(UserBase):
+    is_hod: bool = False
     id: int
     account_status: AccountStatusEnum
     university_id: Optional[str] = None

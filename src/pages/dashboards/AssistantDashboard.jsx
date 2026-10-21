@@ -7,11 +7,12 @@ import { DataTable } from '../../components/common/DataTable';
 import { StatusBadge } from '../../components/common/StatusBadge';
 import { Link } from 'react-router-dom';
 import { filterEquipmentByLabs } from '../../utils/equipmentInventory';
+import { resolveUserDepartment } from '../../utils/userDepartment';
 import { QrCode, History, Plus, Upload, CheckCircle, Clock, AlertTriangle, FileText, Building2 } from 'lucide-react';
 
 export const AssistantDashboard = () => {
   const { user } = useAuth();
-  const { equipmentList, transactionsList, requestsList, labsList } = useLabTrack();
+  const { equipmentList, transactionsList, requestsList, labsList, departmentsList } = useLabTrack();
 
   const assignedLabIds = user?.assignedLabIds || [];
   const assignedLabs = labsList.filter(l => assignedLabIds.includes(l.id));
@@ -30,7 +31,7 @@ export const AssistantDashboard = () => {
   const available = myEquipment.reduce((acc, item) => acc + (parseInt(item.availableQuantity, 10) || 0), 0);
   const borrowed = myEquipment.reduce((acc, item) => acc + (parseInt(item.borrowedQuantity, 10) || 0), 0);
   const overdue = myTransactions.filter(t => t.status === 'Overdue').length;
-  const pendingRequests = myRequests.filter(r => requestHasStage(r, 'PENDING', assignedLabIds)).length;
+  const pendingRequests = myRequests.filter(r => r.items?.some(item => item.status === 'PENDING' && item.approval_stage === 'ASSISTANT' && assignedLabIds.includes(item.lab_id))).length;
   const readyPickupRequests = myRequests.filter(r => requestHasStage(r, 'APPROVED', assignedLabIds)).length;
 
   const columns = [
@@ -84,7 +85,7 @@ export const AssistantDashboard = () => {
             </div>
           </div>
           <div style={{ fontSize: '0.8rem', color: '#166534' }}>
-            Department: <strong>{user?.department || 'Electrical & Electronics'}</strong>
+            Department: <strong>{resolveUserDepartment(user, departmentsList)}</strong>
           </div>
         </div>
       </div>

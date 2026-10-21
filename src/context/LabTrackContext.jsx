@@ -413,6 +413,14 @@ export const LabTrackProvider = ({ children }) => {
     // Enrich the raw backend response with display names for the UI
     const enrichedReq = {
       ...newReq,
+      facultyId: newReq.faculty_id,
+      facultyName: newReq.faculty_name,
+      hodId: newReq.hod_id,
+      hodName: newReq.hod_name,
+      facultyApprovedAt: newReq.faculty_approved_at,
+      hodApprovedAt: newReq.hod_approved_at,
+      approvalHistory: newReq.approval_history || [],
+      submittedAt: newReq.created_at,
       id: newReq.id,
       requesterId: newReq.requesterId || newReq.requester_id,
       requesterName: data.requesterName || 'Unknown User',
@@ -458,7 +466,7 @@ export const LabTrackProvider = ({ children }) => {
   // Extension / Re-issue Flow (No QR scan needed - Assistant approves digitally)
   const requestExtensionAction = async (requestId, transactionId, newDueDate, reason) => {
     const updatedReq = await requestService.createExtensionRequest(requestId, newDueDate, reason);
-    setRequestsList(prev => prev.map(r => r.id === requestId ? updatedReq : r));
+    await refreshData();
     addToast('Extension request submitted to Lab Assistant for approval', 'success');
     return updatedReq;
   };
@@ -466,10 +474,10 @@ export const LabTrackProvider = ({ children }) => {
   const approveExtensionAction = async (requestId, transactionId, newDueDate) => {
     // 1. Update request status to Extended (Backend also extends the transaction automatically)
     const updatedReq = await requestService.approveExtension(requestId);
-    setRequestsList(prev => prev.map(r => r.id === requestId ? updatedReq : r));
+    await refreshData();
 
     // 2. Optimistically update transaction due date directly in state
-    const targetDueDate = newDueDate || updatedReq.requiredUntil;
+    const targetDueDate = newDueDate || updatedReq.requiredUntil || updatedReq.required_until;
     if (transactionId) {
       setTransactionsList(prev => prev.map(t => t.id === transactionId ? { ...t, dueDate: targetDueDate } : t));
     }

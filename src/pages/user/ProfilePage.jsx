@@ -17,7 +17,7 @@ export const ProfilePage = () => {
           </div>
           <div>
             <h2 style={{ fontSize: '1.25rem', fontWeight: 700, margin: 0 }}>{user?.name}</h2>
-            <div style={{ fontSize: '0.85rem', color: '#64748b' }}>Role: <span style={{ textTransform: 'capitalize', fontWeight: 600, color: '#1e40af' }}>{user?.role}</span></div>
+            <div style={{ fontSize: '0.85rem', color: '#64748b' }}>Role: <span style={{ textTransform: 'capitalize', fontWeight: 600, color: '#1e40af' }}>{user?.is_hod ? 'HOD' : user?.role}</span></div>
           </div>
         </div>
 

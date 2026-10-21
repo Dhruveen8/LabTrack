@@ -4,8 +4,9 @@ import { PageHeader } from '../../components/common/PageHeader';
 import { StatCard } from '../../components/common/StatCard';
 import { DataTable } from '../../components/common/DataTable';
 import { StatusBadge } from '../../components/common/StatusBadge';
+import { approvalQueue } from '../../utils/approvalQueue';
 import { Link } from 'react-router-dom';
-import { Search, Send, CalendarCheck, BookOpen, Clock, AlertCircle, CheckSquare, Zap } from 'lucide-react';
+import { Search, Send, CalendarCheck, BookOpen, Clock, AlertCircle, CheckSquare, ShieldCheck, FileSpreadsheet, Zap } from 'lucide-react';
 
 export const FacultyDashboard = () => {
   const { user } = useAuth();
@@ -19,6 +20,7 @@ export const FacultyDashboard = () => {
   );
   const myRequests = requestsList.filter(r => r.requesterId === user?.id);
   const pendingRequests = myRequests.filter(r => r.status === 'Pending' || r.status === 'PENDING');
+  const pendingApprovals = approvalQueue(requestsList, user).length;
 
   // Due soon = active borrowings whose due date is within 5 days for faculty
   const dueSoonCount = myActiveBorrowings.filter(t => {
@@ -43,16 +45,19 @@ export const FacultyDashboard = () => {
     <div>
       <PageHeader
         title={`Welcome, ${user?.name || 'Faculty Member'}`}
-        subtitle="Department Faculty Portal — Equipment requests, research borrowing, and class project reservations"
+        subtitle={user.is_hod ? 'Department HOD Portal — Approvals and personal equipment borrowing' : 'Department Faculty Portal — Student approvals and equipment borrowing'}
       />
 
       {/* Quick Action Strip */}
       <div className="portal-card" style={{ backgroundColor: '#eff6ff', borderColor: '#bfdbfe', marginBottom: '1.25rem' }}>
         <div style={{ fontWeight: 600, fontSize: '0.9rem', color: '#1e40af', marginBottom: '0.75rem' }}>
-          FACULTY QUICK ACTIONS
+          {user.is_hod ? 'HOD QUICK ACTIONS' : 'FACULTY QUICK ACTIONS'}
         </div>
         <div style={{ display: 'flex', gap: '0.75rem', flexWrap: 'wrap' }}>
-          <Link to="/browse-equipment" className="btn btn-primary">
+          {user.is_hod && <Link to="/requests?view=approvals" className="btn btn-primary">
+            <FileSpreadsheet size={16} /> Requests
+          </Link>}
+          <Link to="/browse-equipment" className={`btn ${user.is_hod ? 'btn-secondary' : 'btn-primary'}`}>
             <Search size={16} /> Browse Equipment Catalog
           </Link>
           <Link to="/request-equipment" className="btn btn-secondary">
@@ -69,8 +74,9 @@ export const FacultyDashboard = () => {
 
       {/* Faculty KPI Stats */}
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: '1rem', marginBottom: '1.5rem' }}>
+        <StatCard title="Approvals Pending" value={pendingApprovals} icon={ShieldCheck} color="amber" />
         <StatCard title="Active Borrowings" value={myActiveBorrowings.length} icon={BookOpen} color="blue" />
-        <StatCard title="Pending Requests" value={pendingRequests.length} icon={Clock} color="amber" />
+        <StatCard title="My Pending Requests" value={pendingRequests.length} icon={Clock} color="amber" />
         {/* FIX: Real due-soon count, not hardcoded "1" */}
         <StatCard title="Due Soon" value={dueSoonCount} icon={AlertCircle} color="danger" />
         {/* FIX: Total lifetime borrowings without fabricated +8 offset */}

@@ -8,7 +8,7 @@ import { Link } from 'react-router-dom';
 import { userService } from '../../services/userService';
 
 export const UserManagementPage = () => {
-  const { usersList, labsList, departmentsList, addUser } = useLabTrack();
+  const { usersList, labsList, departmentsList, addUser, refreshData } = useLabTrack();
 
   const [showAddUserModal, setShowAddUserModal] = useState(false);
   const [filterRole, setFilterRole] = useState('ALL');
@@ -79,14 +79,18 @@ export const UserManagementPage = () => {
         </div>
       )
     },
-    { header: 'Department', accessor: 'department' },
+    { header: 'Department', cell: row => departmentsList.find(department => department.id === row.departmentId)?.name || '—' },
     {
       header: 'Role & Responsibilities',
       cell: (row) => (
         <div>
           <span className={`badge ${row.role === 'admin' ? 'badge-danger' : row.role === 'assistant' ? 'badge-info' : row.role === 'faculty' ? 'badge-purple' : 'badge-neutral'}`} style={{ textTransform: 'capitalize' }}>
-            {row.role}
+            {row.is_hod ? 'HOD' : row.role}
           </span>
+          {row.role === 'faculty' && <button className="btn btn-secondary btn-sm" onClick={async () => {
+            try { await userService.update(row.id, { is_hod: !row.is_hod }); await refreshData(); }
+            catch (error) { alert(error.response?.data?.detail || 'Unable to change HOD assignment. Remove the current department HOD assignment first.'); }
+          }}>{row.is_hod ? 'Remove HOD assignment' : 'Assign as HOD'}</button>}
           {row.role === 'assistant' && (
             <div style={{ fontSize: '0.75rem', color: '#1e40af', marginTop: '3px' }}>
               Manages {(row.assignedLabIds || []).length} Lab{(row.assignedLabIds || []).length === 1 ? '' : 's'}
@@ -191,7 +195,7 @@ export const UserManagementPage = () => {
                   Register New Campus User / Staff
                 </h3>
               </div>
-              <button className="btn btn-secondary btn-sm" onClick={() => setShowAddUserModal(false)}>
+              <button type="button" className="btn btn-secondary btn-icon" aria-label="Close user dialog" onClick={() => setShowAddUserModal(false)}>
                 <X size={16} />
               </button>
             </div>
@@ -288,7 +292,7 @@ export const UserManagementPage = () => {
                   </p>
 
                   <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0.5rem' }}>
-                    {labsList.map(lab => {
+                    {labsList.filter(lab => lab.department_id === Number(newUserData.departmentId)).map(lab => {
                       const isChecked = (newUserData.assignedLabIds || []).includes(lab.id);
                       return (
                         <label

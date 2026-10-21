@@ -10,11 +10,13 @@ LabTrack is a laboratory inventory and equipment borrowing platform for administ
 - Submit faculty event / club requests to the assigned lab assistant. Approval issues the equipment.
 - Manage inter-lab transfers, borrowing history, and notifications.
 - View faculty and assistants in the admin user directory, with a separate student list.
-- Choose a department during registration: CE (Computer Engineering), CSE (Computer Science Engineering), IT (Information Technology), AIML (Artificial Intelligence and Machine Learning), or EC (Electronics and Communication). The selected database department determines the portal label; student ID codes are not used to guess it.
+- Initial departments are CE (Computer Engineering), CSE (Computer Science Engineering), and IT (Information Technology). Admin can add departments later. The selected database department determines the portal label; student ID codes are not used to guess it.
 - Display dates as `dd-mm-yyyy`. Student IDs support regular `24CE069` and D2D `D25CE150` formats; faculty, assistant, and lab examples are `FCE001`, `ASST001`, and `LAB-IOT`.
 - Optionally deliver notification emails using Gmail SMTP.
 
 ## Technology
+
+Student requests reserve equipment at submission and route through department faculty, then the student's HOD for equipment flagged by the lab assistant. Academic approval has a seven-day deadline; each approved item then has another seven days for collection, capped by its return date. HODs use faculty login with additional approval permissions. See [department approval rules, setup and verification](backend/DEPARTMENT_APPROVALS.md) for mixed carts, faculty borrowing, walk-ins, events, quick borrow and initial data.
 
 | Layer | Implementation |
 | --- | --- |

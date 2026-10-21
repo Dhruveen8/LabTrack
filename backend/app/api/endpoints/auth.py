@@ -16,19 +16,23 @@ from app.schemas.token import Token
 from app.core import security
 from app.api.deps import get_current_user, require_admin
 from app.services.user_ids import institutional_id, next_assistant_number
-from app.services.registration_departments import REGISTRATION_DEPARTMENTS
 from app.api.endpoints.notifications import create_notification
 from app.db.models import NotificationTypeEnum, NotificationCategoryEnum
 
 router = APIRouter()
 
+
+@router.get('/department-faculty')
+async def department_faculty(db: AsyncSession = Depends(get_db), user: User = Depends(get_current_user)):
+    rows = (await db.scalars(select(User).where(User.department_id == user.department_id,
+        User.role == RoleEnum.FACULTY, User.is_hod.is_(False), User.account_status == AccountStatusEnum.ACTIVE)
+        .order_by(User.name))).all() if user.department_id else []
+    return [{'id': row.id, 'name': row.name} for row in rows]
+
 @router.get('/registration-departments')
 async def registration_departments(db: AsyncSession = Depends(get_db)):
-    departments = (await db.execute(select(Department).where(
-        Department.code.in_(REGISTRATION_DEPARTMENTS)))).scalars().all()
-    by_code = {department.code: department for department in departments}
-    return [{'id': by_code[code].id, 'code': code, 'name': by_code[code].name}
-            for code in REGISTRATION_DEPARTMENTS if code in by_code]
+    departments = (await db.scalars(select(Department).order_by(Department.code))).all()
+    return [{'id': row.id, 'code': row.code, 'name': row.name} for row in departments]
 
 
 @router.post("/register", response_model=UserSchema)
@@ -40,7 +44,7 @@ async def register(
         raise HTTPException(status_code=403, detail="Cannot register admin users")
 
     department = await db.get(Department, user_in.department_id)
-    if department is None or department.code not in REGISTRATION_DEPARTMENTS:
+    if department is None:
         raise HTTPException(status_code=400, detail='Select a valid registration department.')
 
     # FIX: Always normalize email to lowercase before inserting
@@ -262,6 +266,13 @@ async def update_user(
         raise HTTPException(status_code=404, detail="User not found")
 
     update_data = user_update.model_dump(exclude_unset=True)
+    if update_data.get('is_hod', user.is_hod):
+        if update_data.get('role', user.role) != RoleEnum.FACULTY or not update_data.get('department_id', user.department_id):
+            raise HTTPException(400, 'An HOD must be a faculty member assigned to a department')
+    if 'department_id' in update_data and update_data['department_id'] != user.department_id:
+        assignments = (await db.scalars(select(LabAssistantAssignment).where(LabAssistantAssignment.assistant_id == user.id))).all()
+        if assignments:
+            raise HTTPException(409, 'Reassign this assistant’s labs before changing their department')
     if 'role' in update_data or 'university_id' in update_data:
         role = update_data.get('role', user.role)
         try:
@@ -282,11 +293,17 @@ async def update_user(
     for field, value in update_data.items():
         setattr(user, field, value)
 
+    if 'is_hod' in update_data or (user.is_hod and 'name' in update_data):
+        with db.no_autoflush:
+            department = await db.get(Department, user.department_id) if user.department_id else None
+        if department:
+            department.hod_name = user.name if user.is_hod else None
+
     try:
         await db.commit()
     except IntegrityError:
         await db.rollback()
-        raise HTTPException(status_code=400, detail='Email or institutional ID is already registered')
+        raise HTTPException(status_code=409, detail='Email, institutional ID or department HOD assignment already exists. Remove the current HOD assignment before assigning another.')
     await db.refresh(user)
     return user
 

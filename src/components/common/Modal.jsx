@@ -48,16 +48,10 @@ export const Modal = ({ isOpen, onClose, title, children, footer }) => {
             {title}
           </h3>
           <button
+            type="button"
+            className="btn btn-secondary btn-icon"
+            aria-label="Close dialog"
             onClick={onClose}
-            style={{
-              background: 'none',
-              border: 'none',
-              cursor: 'pointer',
-              color: '#64748b',
-              padding: '4px',
-              display: 'flex',
-              borderRadius: '4px'
-            }}
           >
             <X size={18} />
           </button>

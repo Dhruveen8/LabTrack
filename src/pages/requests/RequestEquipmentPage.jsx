@@ -15,7 +15,7 @@ const SingleRequestEquipmentPage = ({ quickBorrow = false }) => {
   const navigate = useNavigate();
   const { user } = useAuth();
   const { equipmentList: inventoryEquipment, createRequestAction, systemSettings } = useLabTrack();
-  const equipmentList = inventoryEquipment.map(model => ({ ...model, availableQuantity: model.availableInHomeLab }));
+  const equipmentList = inventoryEquipment.filter(model => !quickBorrow || !model.requiresHodApproval).map(model => ({ ...model, availableQuantity: model.availableInHomeLab }));
 
   const userRole = user?.role || 'student';
   const isFaculty = userRole === 'faculty';
@@ -143,7 +143,7 @@ const SingleRequestEquipmentPage = ({ quickBorrow = false }) => {
                 <Clock size={16} /> Currently All Units In Use
               </div>
               <div style={{ fontSize: '0.85rem', color: '#475569', marginTop: '4px' }}>
-                You can still submit a request to join the reservation waitlist.
+                Wait for stock to become available before submitting a reservation.
               </div>
             </div>
           )}
