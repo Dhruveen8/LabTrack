@@ -5,7 +5,7 @@ export const Pagination = ({ currentPage, totalPages, onPageChange, totalItems }
   if (totalPages <= 1) return null;
 
   return (
-    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginTop: '1rem', fontSize: '0.85rem', color: '#64748b' }}>
+    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: '.75rem', marginTop: '1rem', fontSize: '0.85rem', color: '#64748b' }}>
       <div>
         Showing page <span style={{ fontWeight: 600, color: '#0f172a' }}>{currentPage}</span> of{' '}
         <span style={{ fontWeight: 600, color: '#0f172a' }}>{totalPages}</span> ({totalItems} records)

@@ -4,6 +4,7 @@ from app.db.models import UnitStatusEnum, EquipmentTypeEnum
 
 # Equipment Model Schemas
 class EquipmentModelBase(BaseModel):
+    requires_hod_approval: bool = False
     name: str
     category: str
     description: Optional[str] = None
@@ -48,6 +49,7 @@ class BulkImportRow(BaseModel):
 
 # --- New schemas for Phase 2 CRUD ---
 class EquipmentModelUpdate(BaseModel):
+    requires_hod_approval: Optional[bool] = None
     name: Optional[str] = None
     category: Optional[str] = None
     description: Optional[str] = None

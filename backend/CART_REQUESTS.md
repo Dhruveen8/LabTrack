@@ -1,5 +1,7 @@
 # Student carts and combined equipment requests
 
+The [department approval workflow](DEPARTMENT_APPROVALS.md) supersedes the original assistant-only approval and return-date-only reservation expiry described below. Current submission requires a supervising faculty ID. Requests reserve immediately, then follow faculty/HOD rules and separate seven-day approval and collection windows.
+
 Student carts persist in PostgreSQL per registered user. Adding, editing or removing a cart item never reserves a physical unit. Cart responses calculate live available stock in the selected lab. Desired quantities remain present when stock becomes insufficient; students revise or remove them explicitly.
 
 ## Setup

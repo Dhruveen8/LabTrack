@@ -1,0 +1,9 @@
+.request-tracking-action { min-width: 190px; max-width: 260px; }
+.request-tracking-action > p { font-size: .8rem; font-weight: 600; color: var(--color-primary-dark); margin-bottom: .65rem; }
+.request-tracking-dialog { position: fixed; inset: 0; margin: auto; padding: 0; width: min(580px, calc(100% - 2rem)); max-height: calc(100dvh - 3rem); border: 1px solid var(--color-border); border-radius: 12px; color: var(--color-text-main); background: var(--color-bg-surface); box-shadow: 0 20px 60px #0f172a33; }
+.request-tracking-dialog::backdrop { background: #0f172a88; }
+.request-tracking-dialog__header { position: sticky; top: 0; display: flex; align-items: flex-start; justify-content: space-between; gap: 1rem; padding: 1.1rem 1.25rem; border-bottom: 1px solid var(--color-border); background: var(--color-bg-surface); z-index: 2; }
+.request-tracking-dialog__header h2 { margin: 0; font-size: 1.05rem; }
+.request-tracking-dialog__header p { margin-top: .2rem; font-size: .8rem; color: var(--color-text-muted); }
+.request-tracking-dialog__content { padding: 1.25rem; }
+.request-tracking-dialog .request-tracking { min-width: 0; max-width: none; }

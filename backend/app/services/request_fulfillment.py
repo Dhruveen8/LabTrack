@@ -9,16 +9,17 @@ from app.db.models import (RequestItem, RequestAllocation, Transaction, Equipmen
 from app.services.lab_access import get_assistant_labs
 from app.services.cart_requests import release_item, sync_request_status, request_response
 from app.api.endpoints.notifications import create_notification
+from app.services.approvals import stage, deadline
 
 
 async def decide_items(db, request, items, assistant, approve):
     labs = await get_assistant_labs(db, assistant.id)
-    owned = [item for item in items if item.lab_id in labs and item.status == RS.PENDING]
+    owned = [item for item in items if item.lab_id in labs and item.status == RS.PENDING and stage(request, item) == 'ASSISTANT']
     if not any(item.lab_id in labs for item in items):
         raise HTTPException(403, 'No items in this request belong to your assigned labs')
     if not owned:
         raise HTTPException(400, 'No pending items in your assigned labs')
-    if request.required_until <= datetime.now(timezone.utc):
+    if any(deadline(request, item) <= datetime.now(timezone.utc) for item in owned):
         raise HTTPException(409, 'This request has expired')
     for item in owned:
         item.status = RS.APPROVED if approve else RS.REJECTED
@@ -28,6 +29,9 @@ async def decide_items(db, request, items, assistant, approve):
     await sync_request_status(db, request)
     request.decided_by_id = assistant.id
     request.decided_at = datetime.now(timezone.utc)
+    request.approval_history = [*(request.approval_history or []), dict(stage='ASSISTANT', actor_id=assistant.id,
+        actor_name=assistant.name, decision='APPROVED' if approve else 'REJECTED', at=request.decided_at.isoformat(),
+        item_ids=[item.id for item in owned])]
     await create_notification(db, request.requester_id,
         'Request Approved' if approve else 'Request Rejected',
         f'Items from your request #{request.id} in this assistant’s labs have been '
@@ -54,6 +58,8 @@ async def checkout_allocated(db, request, items, assistant, asset_id):
         raise HTTPException(409, 'This exact unit is not allocated to this request. Scan one of its reserved assets.')
     if item.status != RS.APPROVED or unit.status != US.RESERVED:
         raise HTTPException(409, 'The item is not approved or the unit has already been issued')
+    if stage(request, item) != 'COLLECTION' or deadline(request, item) <= datetime.now(timezone.utc):
+        raise HTTPException(409, 'The required approvals are incomplete or collection deadline has passed')
     if await db.scalar(select(Transaction.id).where(Transaction.unit_asset_id == asset_id, Transaction.status == TS.ACTIVE)):
         raise HTTPException(409, 'This physical unit already has an active loan')
     transaction = Transaction(request_id=request.id, request_item_id=item.id, unit_asset_id=asset_id,
@@ -81,7 +87,8 @@ async def sync_returned_item(db, request, transaction):
     total, active = (await db.execute(select(func.count(Transaction.id),
         func.count(Transaction.id).filter(Transaction.status == TS.ACTIVE))
         .where(Transaction.request_item_id == item.id))).one()
-    if total >= item.quantity and active == 0:
+    remaining = await db.scalar(select(func.count()).select_from(RequestAllocation).where(RequestAllocation.request_item_id == item.id))
+    if total > 0 and active == 0 and not remaining:
         item.status = RS.RETURNED
     await db.flush()
     await sync_request_status(db, request)

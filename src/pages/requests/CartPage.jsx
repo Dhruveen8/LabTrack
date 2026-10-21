@@ -6,6 +6,7 @@ import { useCart, useLabTrack, useToast, useAuth } from '../../context/hooks';
 import { cartService } from '../../services/cartService';
 import { cartError, cartFingerprint } from '../../utils/cart';
 import './CartPage.css';
+import apiClient from '../../api/client';
 
 const localDateTime = (date) => new Date(date.getTime() - date.getTimezoneOffset() * 60000).toISOString().slice(0, 16);
 
@@ -21,6 +22,10 @@ export const CartPage = () => {
   const [start, setStart] = useState(() => localDateTime(new Date()));
   const [due, setDue] = useState(() => localDateTime(new Date(Date.now() + 7 * 86400000)));
   const [purpose, setPurpose] = useState('');
+  const [facultyId, setFacultyId] = useState('');
+  const [faculty, setFaculty] = useState([]);
+  const [walkIn, setWalkIn] = useState(false);
+  useEffect(() => { apiClient.get('/auth/department-faculty').then(response => setFaculty(response.data)).catch(error => setMessage(cartError(error))); }, []);
   const [message, setMessage] = useState('');
   const [reviewed, setReviewed] = useState(false);
   const [submitting, setSubmitting] = useState(false);
@@ -28,7 +33,7 @@ export const CartPage = () => {
   const submission = useRef(null);
   const fingerprint = cartFingerprint(cart);
 
-  useEffect(() => { setReviewed(false); }, [fingerprint, start, due, purpose]);
+  useEffect(() => { setReviewed(false); }, [fingerprint, start, due, purpose, facultyId, walkIn]);
   useEffect(() => {
     let active = true;
     refreshCart().catch(() => {}).finally(() => { if (active) setChecking(false); });
@@ -41,7 +46,7 @@ export const CartPage = () => {
     try { await operation(); } catch (error) { setMessage(cartError(error)); }
   };
   const validDates = new Date(due) > new Date(start) && new Date(due) > new Date();
-  const canReview = cart.can_submit && !error && !busy && !checking && !submitting && validDates && purpose.trim();
+  const canReview = cart.can_submit && !error && !busy && !checking && !submitting && validDates && purpose.trim() && facultyId;
   const review = async () => {
     setChecking(true);
     setMessage('');
@@ -51,7 +56,7 @@ export const CartPage = () => {
         setReviewed(true);
         submission.current = { items: latest.items.map(({ model_id, lab_id, quantity }) => ({ model_id, lab_id, quantity })),
           required_from: new Date(start).toISOString(), required_until: new Date(due).toISOString(),
-          purpose: purpose.trim(), submission_key: crypto.randomUUID() };
+          purpose: purpose.trim(), faculty_id: Number(facultyId), kind: walkIn ? 'WALK_IN' : 'STANDARD', submission_key: crypto.randomUUID() };
       } else setMessage('Availability changed. Revise the highlighted items before submitting.');
     } catch (error) { setMessage(cartError(error)); }
     finally { setChecking(false); }
@@ -70,7 +75,7 @@ export const CartPage = () => {
       sessionStorage.removeItem(storageKey);
       clearAfterSubmit();
       await refreshData();
-      addToast(`Request #${result.id} submitted with ${result.quantity} units for lab assistant review`, 'success');
+      addToast(`Request #${result.id} submitted. ${result.quantity} units reserved while awaiting faculty approval.`, 'success');
       navigate('/requests');
     } catch (error) {
       if (error.response) sessionStorage.removeItem(storageKey);
@@ -114,6 +119,12 @@ export const CartPage = () => {
     </div>)}
     {!!cart.items.length && <div className="portal-card">
       <h3>Borrowing details</h3><p>Student policy: up to {systemSettings.studentBorrowLimitDays || 14} days. Existing item limits still apply.</p>
+      <label>Supervising faculty<select className="form-control" value={facultyId} disabled={submitting || !!pending} onChange={event => setFacultyId(event.target.value)}>
+        <option value="">Select faculty from your department</option>{faculty.map(person => <option key={person.id} value={person.id}>{person.name}</option>)}
+      </select></label>
+      {!faculty.length && <p role="status">Your department needs an active faculty member before you can submit.</p>}
+      <label><input type="checkbox" checked={walkIn} disabled={submitting || !!pending} onChange={event => setWalkIn(event.target.checked)} /> Small-equipment walk-in (faculty approval required)</label>
+      <p>Equipment is reserved on submission. Required approvals must finish within seven days. Approved items have another seven days for collection, up to the return deadline.</p>
       <div className="cart-dates"><label>Required from<input className="form-control" type="datetime-local" value={start} disabled={submitting || !!pending} onChange={event => setStart(event.target.value)} /></label>
         <label>Return by<input className="form-control" type="datetime-local" value={due} disabled={submitting || !!pending} onChange={event => setDue(event.target.value)} /></label></div>
       <label>Purpose<textarea className="form-control" value={purpose} maxLength="2000" disabled={submitting || !!pending} onChange={event => setPurpose(event.target.value)} placeholder="Describe your coursework or project" /></label>

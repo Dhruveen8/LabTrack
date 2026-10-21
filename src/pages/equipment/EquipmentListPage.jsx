@@ -114,7 +114,7 @@ export const EquipmentListPage = () => {
             <Printer size={13} /> QR
           </button>
           {isAdmin && (
-            <button className="btn btn-danger btn-sm" title="Delete equipment" aria-label={`Delete ${row.name}`} disabled={deletingId !== null} onClick={() => setEquipmentToDelete(row)}>
+            <button className="btn btn-danger btn-icon" title="Delete equipment" aria-label={`Delete ${row.name}`} disabled={deletingId !== null} onClick={() => setEquipmentToDelete(row)}>
               <Trash2 size={13} />
             </button>
           )}
@@ -148,7 +148,7 @@ export const EquipmentListPage = () => {
       header: 'Actions',
       cell: (row) => (
         <div style={{ display: 'flex', gap: '0.35rem' }}>
-          <Link to={`/equipment/${row.assetId}`} className="btn btn-secondary btn-sm">
+          <Link to={`/equipment/${row.assetId}`} className="btn btn-secondary btn-icon" aria-label={`View ${row.assetId}`}>
             <Eye size={13} />
           </Link>
           <button
@@ -205,14 +205,12 @@ export const EquipmentListPage = () => {
         <div style={{ display: 'flex', gap: '4px', backgroundColor: '#e2e8f0', padding: '3px', borderRadius: '6px' }}>
           <button
             className={`btn btn-sm ${viewMode === 'MODELS' ? 'btn-primary' : 'btn-secondary'}`}
-            style={{ border: 'none' }}
             onClick={() => setViewMode('MODELS')}
           >
             <Layers size={13} /> View by Model ({filteredList.length})
           </button>
           <button
             className={`btn btn-sm ${viewMode === 'UNITS' ? 'btn-primary' : 'btn-secondary'}`}
-            style={{ border: 'none' }}
             onClick={() => setViewMode('UNITS')}
           >
             <QrCode size={13} /> View by Asset Tag ({allUnitsList.length})

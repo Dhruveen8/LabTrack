@@ -72,7 +72,7 @@ a {
 }
 
 a:hover {
-  text-decoration: underline;
+  text-decoration: none;
 }
 
 /* Institutional Portal Layout Elements */
@@ -112,28 +112,38 @@ a:hover {
 }
 
 /* Institutional Buttons */
+button { font-family: inherit; }
+
 .btn {
+  --btn-height: 40px;
+  --btn-padding: .55rem 1rem;
+  --btn-font-size: .875rem;
   display: inline-flex;
   align-items: center;
   justify-content: center;
   gap: 0.5rem;
-  padding: 0.5rem 1rem;
-  font-size: 0.875rem;
+  padding: var(--btn-padding);
+  min-height: var(--btn-height);
+  max-width: 100%;
+  font-family: inherit;
+  line-height: 1.4;
+  font-size: var(--btn-font-size);
   font-weight: 500;
   border-radius: var(--radius-md);
   border: 1px solid transparent;
   cursor: pointer;
-  transition: all 0.15s ease-in-out;
-  white-space: nowrap;
+  transition: background-color 0.15s ease-in-out, border-color 0.15s ease-in-out, box-shadow 0.15s ease-in-out;
+  white-space: normal;
+  text-align: center;
 }
 
-.btn-primary {
+.btn-primary, .btn-success {
   background-color: var(--color-primary);
   color: #ffffff;
   border-color: var(--color-primary-dark);
 }
 
-.btn-primary:hover {
+.btn-primary:hover:not(:disabled), .btn-success:hover:not(:disabled) {
   background-color: var(--color-primary-dark);
 }
 
@@ -143,27 +153,54 @@ a:hover {
   border-color: var(--color-border-dark);
 }
 
-.btn-secondary:hover {
+.btn-secondary:hover:not(:disabled) {
   background-color: var(--color-secondary-light);
 }
 
 .btn-danger {
   background-color: var(--color-danger);
   color: #ffffff;
+  border-color: #991b1b;
 }
 
-.btn-danger:hover {
+.btn-danger:hover:not(:disabled) {
   background-color: #991b1b;
 }
 
-.btn-sm {
-  padding: 0.35rem 0.65rem;
-  font-size: 0.8rem;
+.btn-sm, .table-responsive .btn, .requests-page__filters .btn {
+  --btn-height: 36px;
+  --btn-padding: .4rem .75rem;
+  --btn-font-size: .8125rem;
 }
 
+.btn svg { width: 16px; height: 16px; flex-shrink: 0; }
+.btn.btn-icon { --btn-height: 36px; width: var(--btn-height); height: var(--btn-height); padding: 0; flex-shrink: 0; }
+.btn-ghost { background: transparent; color: var(--color-text-muted); border-color: transparent; }
+.btn-ghost:hover:not(:disabled) { background: var(--color-secondary-light); color: var(--color-text-main); }
+.btn-inverse { background: #ffffff14; color: white; border-color: #ffffff33; }
+.btn-inverse:hover:not(:disabled) { background: #ffffff26; border-color: #ffffff66; }
+.btn:focus-visible, button:focus-visible { outline: 2px solid var(--color-primary-light); outline-offset: 3px; }
+.btn:disabled, .btn[aria-disabled="true"] { opacity: .5; cursor: not-allowed; box-shadow: none; }
+
+@media (prefers-reduced-motion: reduce) { .btn { transition: none; } }
+
 .btn-lg {
-  padding: 0.75rem 1.5rem;
-  font-size: 1rem;
+  --btn-height: 44px;
+  --btn-padding: .65rem 1.25rem;
+  --btn-font-size: .9375rem;
+}
+
+.search-control .form-control { min-height: 40px; }
+.search-control .btn.btn-icon { --btn-height: 32px; }
+
+@media (max-width: 640px), (pointer: coarse) {
+  .btn, .btn-sm, .btn-lg, .btn.btn-icon, .table-responsive .btn, .requests-page__filters .btn {
+    --btn-height: 44px;
+    --btn-padding: .625rem 1rem;
+    --btn-font-size: .875rem;
+  }
+  .search-control .form-control { min-height: 44px; }
+  .search-control .btn.btn-icon { --btn-height: 40px; }
 }
 
 /* Institutional Inputs */

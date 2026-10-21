@@ -26,12 +26,13 @@ TEST_PASSWORD = 'CartBrowser-Only-2026!'
 async def lifespan(app):
     async with AsyncSessionLocal() as db:
         data = await fixtures(db)
-        for identity in data['users'] + data['assistants']:
+        for identity in data['users'] + data['assistants'] + [data['faculty']]:
             user = await db.get(User, identity.id)
             user.hashed_password = get_password_hash(TEST_PASSWORD)
         await db.commit()
     print(json.dumps({'test_students': [user.email for user in data['users']],
                       'test_assistants': [user.email for user in data['assistants']],
+                      'test_faculty': data['faculty'].email,
                       'test_password': TEST_PASSWORD,
                       'models': [model.id for model in data['models']],
                       'assets': [unit.asset_id for unit in data['units']]}), flush=True)

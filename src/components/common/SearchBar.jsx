@@ -3,7 +3,7 @@ import { Search, X } from 'lucide-react';
 
 export const SearchBar = ({ value, onChange, placeholder = 'Search equipment, ID, lab...' }) => {
   return (
-    <div style={{ position: 'relative', width: '100%', maxWidth: '320px' }}>
+    <div className="search-control" style={{ position: 'relative', width: '100%', maxWidth: '320px' }}>
       <Search
         size={16}
         style={{
@@ -16,25 +16,25 @@ export const SearchBar = ({ value, onChange, placeholder = 'Search equipment, ID
       />
       <input
         type="text"
+        role="searchbox"
+        aria-label={placeholder}
         className="form-control"
-        style={{ paddingLeft: '32px', paddingRight: value ? '32px' : '12px' }}
+        style={{ paddingLeft: '32px', paddingRight: value ? '44px' : '12px' }}
         value={value}
         onChange={(e) => onChange(e.target.value)}
         placeholder={placeholder}
       />
       {value && (
         <button
+          type="button"
+          className="btn btn-ghost btn-icon"
+          aria-label="Clear search"
           onClick={() => onChange('')}
           style={{
             position: 'absolute',
-            right: '8px',
+            right: '2px',
             top: '50%',
-            transform: 'translateY(-50%)',
-            background: 'none',
-            border: 'none',
-            cursor: 'pointer',
-            color: '#64748b',
-            display: 'flex'
+            transform: 'translateY(-50%)'
           }}
         >
           <X size={14} />

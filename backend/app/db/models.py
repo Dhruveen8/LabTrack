@@ -109,6 +109,7 @@ class User(Base):
     hashed_password = Column(String, nullable=True)                  # NULL until activation
     name = Column(String, nullable=False)
     role = Column(_enum(RoleEnum, "roleenum"), nullable=False)
+    is_hod = Column(Boolean, nullable=False, server_default=text("false"))
     department_id = Column(Integer, ForeignKey("departments.id", ondelete="SET NULL"), nullable=True)
     account_status = Column(_enum(AccountStatusEnum, "accountstatusenum"), nullable=False,
                             server_default=AccountStatusEnum.ACTIVE.value)
@@ -123,6 +124,8 @@ class User(Base):
     deactivated_at = Column(DateTime(timezone=True), nullable=True)
 
     __table_args__ = (
+        CheckConstraint("NOT is_hod OR (role = 'FACULTY' AND department_id IS NOT NULL)", name='ck_users_hod_faculty'),
+        Index('uq_department_hod', 'department_id', unique=True, postgresql_where=text('is_hod')),
         CheckConstraint('assistant_number IS NULL OR assistant_number BETWEEN 1 AND 999', name='ck_users_assistant_number'),
         CheckConstraint(
             "email_domain_exempt OR role = 'ADMIN' "
@@ -167,6 +170,7 @@ class EquipmentModel(Base):
     name = Column(String, nullable=False)
     category = Column(String, nullable=False)
     description = Column(String, nullable=True)
+    requires_hod_approval = Column(Boolean, nullable=False, server_default=text('false'))
     equipment_type = Column(_enum(EquipmentTypeEnum, "equipmenttypeenum"), nullable=False,
                             server_default=EquipmentTypeEnum.STANDARD.value)
 
@@ -224,6 +228,10 @@ class EventRequest(Base):
     event_name = Column(String(200), nullable=False)
     purpose = Column(Text, nullable=False)
     coordinator_id = Column(Integer, ForeignKey('users.id', ondelete='RESTRICT'), nullable=False)
+    hod_id = Column(Integer, ForeignKey('users.id', ondelete='RESTRICT'), nullable=True)
+    hod_approved_at = Column(DateTime(timezone=True), nullable=True)
+    approval_deadline = Column(DateTime(timezone=True), nullable=True)
+    collection_deadline = Column(DateTime(timezone=True), nullable=True)
     lab_id = Column(Integer, ForeignKey('labs.id', ondelete='RESTRICT'), nullable=False)
     unit_asset_ids = Column(JSON, nullable=False)
     requested_items = Column(JSON, nullable=False, server_default=text("'[]'"))
@@ -235,7 +243,7 @@ class EventRequest(Base):
     rejection_reason = Column(Text, nullable=True)
     event_issue_id = Column(Integer, ForeignKey('event_issues.id', ondelete='RESTRICT'), nullable=True, unique=True)
     __table_args__ = (
-        CheckConstraint("status IN ('PENDING', 'APPROVED', 'REJECTED')", name='ck_event_requests_status'),
+        CheckConstraint("status IN ('PENDING', 'APPROVED', 'REJECTED', 'CANCELLED')", name='ck_event_requests_status'),
         CheckConstraint("(status = 'APPROVED') = (event_issue_id IS NOT NULL)", name='ck_event_requests_issue'),
         CheckConstraint("status <> 'REJECTED' OR rejection_reason IS NOT NULL", name='ck_event_requests_rejection'),
         Index('ix_event_requests_lab_status', 'lab_id', 'status'),
@@ -246,6 +254,12 @@ class Request(Base):
     __tablename__ = "requests"
     id = Column(Integer, primary_key=True, index=True)
     requester_id = Column(Integer, ForeignKey("users.id", ondelete="RESTRICT"), nullable=False)
+    faculty_id = Column(Integer, ForeignKey('users.id', ondelete='RESTRICT'), nullable=True)
+    hod_id = Column(Integer, ForeignKey('users.id', ondelete='RESTRICT'), nullable=True)
+    faculty_approved_at = Column(DateTime(timezone=True), nullable=True)
+    hod_approved_at = Column(DateTime(timezone=True), nullable=True)
+    approval_deadline = Column(DateTime(timezone=True), nullable=True)
+    approval_history = Column(JSON, nullable=False, server_default=text("'[]'"))
     model_id = Column(Integer, ForeignKey("equipment_models.id", ondelete="RESTRICT"), nullable=False)
     lab_id = Column(Integer, ForeignKey("labs.id", ondelete="RESTRICT"), nullable=False)
     kind = Column(_enum(RequestKindEnum, "requestkindenum"), nullable=False,
@@ -281,6 +295,8 @@ class RequestItem(Base):
     model_id = Column(Integer, ForeignKey('equipment_models.id', ondelete='RESTRICT'), nullable=False)
     lab_id = Column(Integer, ForeignKey('labs.id', ondelete='RESTRICT'), nullable=False)
     quantity = Column(Integer, nullable=False)
+    requires_hod_approval = Column(Boolean, nullable=False, server_default=text('false'))
+    collection_deadline = Column(DateTime(timezone=True), nullable=True)
     status = Column(_enum(RequestStatusEnum, 'requeststatusenum'), nullable=False, server_default='PENDING')
     __table_args__ = (UniqueConstraint('request_id', 'model_id', 'lab_id', name='uq_request_item_model_lab'),
                      CheckConstraint('quantity > 0', name='ck_request_item_quantity'),)

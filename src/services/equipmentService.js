@@ -25,6 +25,7 @@ export const equipmentService = {
         return {
           id: model.id, // Ensure it's string if needed, but int works
           name: model.name,
+          requiresHodApproval: model.requires_hod_approval,
           category: model.category,
           labId: model.lab_id,
           labName: lab.name || 'Unknown Lab',

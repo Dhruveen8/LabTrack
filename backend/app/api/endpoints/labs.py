@@ -78,6 +78,11 @@ async def update_lab(
     update_data = lab_in.model_dump()
     if not await db.get(Department, lab_in.department_id):
         raise HTTPException(status_code=404, detail='Department not found')
+    assignment = await db.get(LabAssistantAssignment, lab.id)
+    if assignment:
+        assistant = await db.get(User, assignment.assistant_id)
+        if assistant.department_id != lab_in.department_id:
+            raise HTTPException(409, 'Reassign the lab assistant before moving this lab to another department')
     for field, value in update_data.items():
         setattr(lab, field, value)
 
@@ -122,8 +127,10 @@ async def assign_assistant(
 
     user_result = await db.execute(select(User).where(User.id == assistant_id))
     assistant = user_result.scalars().first()
-    if not assistant or assistant.role != RoleEnum.ASSISTANT:
+    if not assistant or assistant.role != RoleEnum.ASSISTANT or assistant.account_status.value != 'ACTIVE':
         raise HTTPException(status_code=400, detail="User is not a valid assistant")
+    if assistant.department_id != lab.department_id:
+        raise HTTPException(400, 'An assistant can only manage labs within their own department')
 
     # FIX: Upsert by lab_id alone — if any assignment exists for this lab,
     # update it to the new assistant (replacing the previous one).

@@ -368,7 +368,7 @@ export const IssueEquipmentPage = () => {
                   </div>
                 </div>
                 <div>
-                  <span className={`btn btn-sm ${selectedRequest === 'WALKIN' ? 'btn-primary' : 'btn-secondary'}`} style={{ backgroundColor: selectedRequest === 'WALKIN' ? '#10b981' : undefined, borderColor: selectedRequest === 'WALKIN' ? '#10b981' : undefined }}>
+                  <span className={`btn btn-sm ${selectedRequest === 'WALKIN' ? 'btn-primary' : 'btn-secondary'}`}>
                     {selectedRequest === 'WALKIN' ? 'Selected' : 'Proceed as Walk-in'}
                   </span>
                 </div>

@@ -37,6 +37,11 @@ async def fixtures(db, quantities=(1, 2)):
     dept = Department(name=f'Cart department {suffix}', code=f'CT{suffix}')
     db.add_all([*users, *assistants, dept])
     await db.flush()
+    for person in users + assistants:
+        person.department_id = dept.id
+    faculty = User(name='Supervising Faculty', email=f'faculty.{suffix}@charusat.ac.in', role=RoleEnum.FACULTY, department_id=dept.id)
+    db.add(faculty)
+    await db.flush()
     labs = [Lab(name=f'Cart Lab {i}', code=f'CT{suffix.upper()}{i}', department_id=dept.id) for i in range(2)]
     db.add_all(labs)
     await db.flush()
@@ -56,12 +61,12 @@ async def fixtures(db, quantities=(1, 2)):
         return SimpleNamespace(**{key: value for key, value in vars(row).items() if not key.startswith('_')})
     return dict(users=list(map(snapshot, users)), assistants=list(map(snapshot, assistants)),
                 labs=list(map(snapshot, labs)), models=list(map(snapshot, models)),
-                units=list(map(snapshot, units)), department=snapshot(dept))
+                units=list(map(snapshot, units)), department=snapshot(dept), faculty=snapshot(faculty))
 
 
-def payload(items, key=None):
+def payload(data, items, key=None):
     now = datetime.now(timezone.utc)
-    return dict(items=items, required_from=now.isoformat(), required_until=(now + timedelta(days=2)).isoformat(),
+    return dict(items=items, faculty_id=data['faculty'].id, required_from=now.isoformat(), required_until=(now + timedelta(days=2)).isoformat(),
                 purpose='Cart regression', submission_key=key or str(uuid4()))
 
 
@@ -113,7 +118,7 @@ async def test_last_unit_cart_is_not_a_reservation_and_stale_submit_is_atomic(mo
         assert await db.scalar(select(func.count(RequestAllocation.asset_id)).where(RequestAllocation.asset_id == data['units'][0].asset_id)) == 0
         current[0] = data['users'][1]
         await put(client, data)
-        submitted = await client.post('/api/v1/borrowing/cart/submit', json=payload([selection(data)]))
+        submitted = await client.post('/api/v1/borrowing/cart/submit', json=payload(data, [selection(data)]))
         assert submitted.status_code == 200, submitted.text
         assert submitted.json()['items'][0]['quantity'] == 1
         current[0] = data['users'][0]
@@ -121,7 +126,7 @@ async def test_last_unit_cart_is_not_a_reservation_and_stale_submit_is_atomic(mo
         assert stale['items'][0]['unavailable'] and not stale['can_submit']
         # A second available type must remain untouched when the first is short.
         await put(client, data, 1)
-        response = await client.post('/api/v1/borrowing/cart/submit', json=payload([selection(data), selection(data, 1)]))
+        response = await client.post('/api/v1/borrowing/cart/submit', json=payload(data, [selection(data), selection(data, 1)]))
         assert response.status_code == 409 and response.json()['detail']['code'] == 'INSUFFICIENT_STOCK'
         assert await db.scalar(select(func.count(Request.id)).where(Request.requester_id == current[0].id)) == 0
         assert await db.scalar(select(EquipmentUnit.status).where(EquipmentUnit.asset_id == data['units'][1].asset_id)) == US.AVAILABLE
@@ -137,12 +142,14 @@ async def test_multi_lab_approval_barcode_issue_partial_return_and_email_context
     async def case(client, db, data, current):
         await put(client, data)
         await put(client, data, 1, 2)
-        response = await client.post('/api/v1/borrowing/cart/submit', json=payload([selection(data), selection(data, 1, 2)]))
+        response = await client.post('/api/v1/borrowing/cart/submit', json=payload(data, [selection(data), selection(data, 1, 2)]))
         assert response.status_code == 200, response.text
         request = response.json()
         request_id = request['id']
         assert request['quantity'] == 3 and len(request['items']) == 2
         assert not (await client.get('/api/v1/borrowing/cart')).json()['items']
+        current[0] = data['faculty']
+        assert (await client.post(f'/api/v1/borrowing/requests/{request_id}/review', json={'approve': True})).status_code == 200
         current[0] = data['assistants'][0]
         lookup = await client.get('/api/v1/auth/users/lookup', params={'q': data['users'][0].university_id})
         assert lookup.status_code == 200 and lookup.json()[0]['id'] == data['users'][0].id
@@ -185,8 +192,10 @@ async def test_partial_rejection_releases_only_assistants_lab(monkeypatch):
     async def case(client, db, data, current):
         await put(client, data)
         await put(client, data, 1)
-        response = await client.post('/api/v1/borrowing/cart/submit', json=payload([selection(data), selection(data, 1)]))
+        response = await client.post('/api/v1/borrowing/cart/submit', json=payload(data, [selection(data), selection(data, 1)]))
         request = response.json()
+        current[0] = data['faculty']
+        assert (await client.post(f'/api/v1/borrowing/requests/{request["id"]}/review', json={'approve': True})).status_code == 200
         current[0] = data['assistants'][0]
         response = await client.post(f'/api/v1/borrowing/requests/{request["id"]}/reject')
         assert response.status_code == 200, response.text
@@ -201,7 +210,7 @@ async def test_partial_rejection_releases_only_assistants_lab(monkeypatch):
 async def test_changed_cart_and_replayed_submission_are_not_silently_accepted(monkeypatch):
     async def case(client, db, data, current):
         await put(client, data)
-        original = payload([selection(data)])
+        original = payload(data, [selection(data)])
         # A quantity changed on another device requires another review.
         await put(client, data, quantity=2)
         response = await client.post('/api/v1/borrowing/cart/submit', json=original)
@@ -221,8 +230,10 @@ async def test_expiry_releases_uncollected_units_without_restocking_active_loans
     async def case(client, db, data, current):
         await put(client, data)
         await put(client, data, 1, 2)
-        request = (await client.post('/api/v1/borrowing/cart/submit', json=payload([
+        request = (await client.post('/api/v1/borrowing/cart/submit', json=payload(data, [
             selection(data), selection(data, 1, 2)]))).json()
+        current[0] = data['faculty']
+        assert (await client.post(f'/api/v1/borrowing/requests/{request["id"]}/review', json={'approve': True})).status_code == 200
         current[0] = data['assistants'][1]
         await client.post(f'/api/v1/borrowing/requests/{request["id"]}/approve')
         issued_asset = request['items'][1]['reserved_asset_ids'][0]
@@ -255,7 +266,7 @@ async def test_expiry_releases_uncollected_units_without_restocking_active_loans
 
 async def cleanup(db, data):
     """Delete only fixture IDs returned by this test's own setup."""
-    user_ids = [row.id for row in data['users'] + data['assistants']]
+    user_ids = [row.id for row in data['users'] + data['assistants'] + [data['faculty']]]
     model_ids = [row.id for row in data['models']]
     lab_ids = [row.id for row in data['labs']]
     requests = select(Request.id).where(Request.requester_id.in_(user_ids))
@@ -290,7 +301,7 @@ async def test_concurrent_last_unit_and_idempotent_retry_and_repeated_issue(monk
                 try:
                     now = datetime.now(timezone.utc)
                     result = await allocate_request(db, user, [CartSelection(**selection(data))], now,
-                                                    now + timedelta(days=2), 'Concurrent regression')
+                                                    now + timedelta(days=2), 'Concurrent regression', faculty_id=data['faculty'].id)
                     if hold:
                         winner_locked.set()
                         await asyncio.wait_for(loser_finished.wait(), 10)
@@ -317,7 +328,7 @@ async def test_concurrent_last_unit_and_idempotent_retry_and_repeated_issue(monk
             async with sessions() as db:
                 user = await db.get(User, data['users'][0].id)
                 result = await allocate_request(db, user, [CartSelection(**selection(data, 1))], retry_start,
-                    retry_start + timedelta(days=2), 'Idempotency regression', key=key)
+                    retry_start + timedelta(days=2), 'Idempotency regression', key=key, faculty_id=data['faculty'].id)
                 await db.commit()
                 return result.id
         ids = await asyncio.gather(retry(), retry())
@@ -326,6 +337,7 @@ async def test_concurrent_last_unit_and_idempotent_retry_and_repeated_issue(monk
             assert await db.scalar(select(func.count(Request.id)).where(Request.submission_key == key)) == 1
             request = await db.get(Request, request_id)
             request.status = RS.APPROVED
+            request.faculty_approved_at = datetime.now(timezone.utc)
             item = (await db.scalars(select(RequestItem).where(RequestItem.request_id == request_id))).one()
             item.status = RS.APPROVED
             await db.commit()

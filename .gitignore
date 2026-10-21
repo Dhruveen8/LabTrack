@@ -46,3 +46,6 @@ venv/
 *.egg-info/
 dist/
 build/
+output/private-backups/
+output/private-setup/
+output/workflow-qa/

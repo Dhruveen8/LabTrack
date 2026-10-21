@@ -173,7 +173,7 @@ export const LoginPage = () => {
               </label>
             </div>
 
-            <button type="submit" className="btn btn-primary" style={{ width: '100%', padding: '0.65rem', marginBottom: '1rem' }}>
+            <button type="submit" className="btn btn-primary" style={{ width: '100%', marginBottom: '1rem' }}>
               Sign In to Portal <ArrowRight size={16} />
             </button>
 

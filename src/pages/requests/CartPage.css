@@ -13,5 +13,4 @@
 .cart-review { margin-top: 1rem; padding: 1rem; background: #eff6ff; border-radius: 8px; }
 .cart-review button, .cart-warning button { margin: .5rem .5rem 0 0; }
 .cart-page textarea { margin-bottom: 1rem; }
-.cart-page button:disabled { opacity: .5; cursor: not-allowed; }
 @media (max-width: 640px) { .cart-add, .cart-dates { grid-template-columns: 1fr; } .cart-item-controls { width: 100%; justify-content: space-between; } }

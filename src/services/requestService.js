@@ -7,6 +7,16 @@ export const requestService = {
       const response = await apiClient.get('/borrowing/requests');
       // Map backend fields to frontend-expected field names
       return response.data.map(req => ({
+        facultyId: req.faculty_id,
+        hodId: req.hod_id,
+        facultyName: req.faculty_name,
+        hodName: req.hod_name,
+        facultyApprovedAt: req.faculty_approved_at,
+        hodApprovedAt: req.hod_approved_at,
+        approvalDeadline: req.approval_deadline,
+        approvalHistory: req.approval_history || [],
+        submittedAt: req.created_at,
+        rejectionReason: req.rejection_reason,
         id: req.id,
         requesterId: req.requester_id,
         requesterName: req.requester_name,
@@ -144,6 +154,7 @@ export const requestService = {
   },
 
   getEventRequests: async () => (await apiClient.get('/borrowing/events/requests')).data,
+  reviewEventAsHod: async (id, approve, reason) => (await apiClient.post(`/borrowing/events/requests/${id}/hod-review`, { approve, reason: reason || null })).data,
 
   approveEventRequest: async (id, unitAssetIds) => (await apiClient.post(`/borrowing/events/requests/${id}/approve`, { unit_asset_ids: unitAssetIds })).data,
 

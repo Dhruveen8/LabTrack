@@ -1,5 +1,5 @@
 """Faculty event requests; only the assigned assistant can approve and issue."""
-from datetime import datetime, timezone
+from datetime import datetime, timezone, timedelta
 from typing import Optional
 
 from fastapi import APIRouter, Depends, HTTPException
@@ -16,6 +16,8 @@ from app.db.models import (EventRequest, EquipmentModel, EquipmentUnit, LabAssis
                           UnitStatusEnum, NotificationTypeEnum, NotificationCategoryEnum)
 from app.schemas.borrowing import EventIssueCreate
 from app.services.lab_access import get_assistant_labs
+from app.services.approvals import department_hod, notify
+from app.services.cart_requests import free_units
 
 router = APIRouter()
 
@@ -77,6 +79,10 @@ class EventRequestCreate(BaseModel):
 class EventRequestResponse(BaseModel):
     model_config = ConfigDict(from_attributes=True)
     id: int
+    hod_id: Optional[int] = None
+    hod_approved_at: Optional[datetime] = None
+    approval_deadline: Optional[datetime] = None
+    collection_deadline: Optional[datetime] = None
     event_name: str
     purpose: str
     coordinator_id: int
@@ -105,9 +111,12 @@ async def submit_request(payload: EventRequestCreate, db: AsyncSession = Depends
     due = payload.due_date if payload.due_date.tzinfo else payload.due_date.replace(tzinfo=timezone.utc)
     if due <= datetime.now(timezone.utc):
         raise HTTPException(status_code=400, detail='Return date must be in the future')
+    # Lock the borrower, then units in deterministic order for competing submissions.
+    await db.execute(select(User.id).where(User.id == user.id).with_for_update())
+    reserved = []
     if payload.requested_items:
         lab_id = payload.lab_id
-        for item in payload.requested_items:
+        for item in sorted(payload.requested_items, key=lambda item: item.model_id):
             model = await db.get(EquipmentModel, item.model_id)
             if not model or model.lab_id != lab_id:
                 raise HTTPException(status_code=400, detail='Selected equipment must belong to the selected lab')
@@ -116,9 +125,15 @@ async def submit_request(payload: EventRequestCreate, db: AsyncSession = Depends
                 EquipmentUnit.status == UnitStatusEnum.AVAILABLE))).scalar_one()
             if available < item.quantity:
                 raise HTTPException(status_code=400, detail=f'Only {available} units of {model.name} are available')
+            held = (await db.scalars(free_units(model.id, lab_id).order_by(EquipmentUnit.asset_id)
+                .with_for_update(skip_locked=True).limit(item.quantity))).all()
+            if len(held) != item.quantity:
+                raise HTTPException(409, 'Stock changed while submitting. No equipment was reserved; retry.')
+            reserved.extend(held)
         quantity = sum(item.quantity for item in payload.requested_items)
     else:
-        units = (await db.execute(select(EquipmentUnit).where(EquipmentUnit.asset_id.in_(payload.unit_asset_ids)))).scalars().all()
+        units = (await db.execute(select(EquipmentUnit).where(EquipmentUnit.asset_id.in_(payload.unit_asset_ids))
+            .order_by(EquipmentUnit.asset_id).with_for_update())).scalars().all()
         if len(units) != len(payload.unit_asset_ids):
             raise HTTPException(status_code=404, detail='One or more equipment units not found')
         lab_id = units[0].lab_id
@@ -127,17 +142,24 @@ async def submit_request(payload: EventRequestCreate, db: AsyncSession = Depends
         if any(unit.status != UnitStatusEnum.AVAILABLE for unit in units):
             raise HTTPException(status_code=400, detail='One or more equipment units are unavailable')
         quantity = len(units)
+        reserved = list(units)
     assistant_id = (await db.execute(select(LabAssistantAssignment.assistant_id)
                                    .where(LabAssistantAssignment.lab_id == lab_id))).scalar_one_or_none()
     assistant = await db.get(User, assistant_id) if assistant_id else None
     if not assistant or assistant.account_status.value != 'ACTIVE':
         raise HTTPException(status_code=400, detail='This lab needs an active assigned assistant before you can submit a request')
+    hod = await department_hod(db, user.department_id) if not user.is_hod else None
+    now = datetime.now(timezone.utc)
+    for unit in reserved:
+        unit.status = UnitStatusEnum.RESERVED
     request = EventRequest(event_name=payload.event_name, purpose=payload.purpose,
-                           coordinator_id=user.id, lab_id=lab_id, unit_asset_ids=payload.unit_asset_ids,
+                           coordinator_id=user.id, lab_id=lab_id, unit_asset_ids=[unit.asset_id for unit in reserved],
+                           hod_id=hod.id if hod else None, approval_deadline=min(now + timedelta(days=7), due),
+                           collection_deadline=None if hod else min(now + timedelta(days=7), due),
                            requested_items=[item.model_dump() for item in payload.requested_items], due_date=due)
     db.add(request)
     await db.flush()
-    await create_notification(db, assistant_id, 'Event Request Pending',
+    await create_notification(db, hod.id if hod else assistant_id, 'Event Request Pending',
         f'{user.name} requested {quantity} units for {request.event_name}. Review it in Event / Club Requests.',
         NotificationTypeEnum.INFO, NotificationCategoryEnum.REQUEST)
     await db.commit()
@@ -148,7 +170,7 @@ async def submit_request(payload: EventRequestCreate, db: AsyncSession = Depends
 async def list_requests(db: AsyncSession = Depends(get_db), user: User = Depends(get_current_user)):
     query = select(EventRequest).order_by(EventRequest.created_at.desc())
     if user.role == RoleEnum.FACULTY:
-        query = query.where(EventRequest.coordinator_id == user.id)
+        query = query.where((EventRequest.coordinator_id == user.id) | (EventRequest.hod_id == user.id))
     elif user.role == RoleEnum.ASSISTANT:
         query = query.where(EventRequest.lab_id.in_(await get_assistant_labs(db, user.id)))
     elif user.role != RoleEnum.ADMIN:
@@ -166,6 +188,10 @@ async def pending_request(db, request_id, assistant):
         raise HTTPException(status_code=403, detail='Not authorized for this lab')
     if request.status != 'PENDING':
         raise HTTPException(status_code=409, detail='This event request has already been decided')
+    if request.hod_id and not request.hod_approved_at:
+        raise HTTPException(409, 'This event request still requires HOD approval')
+    if min(request.due_date, request.collection_deadline or request.due_date) <= datetime.now(timezone.utc):
+        raise HTTPException(409, 'Event collection deadline has passed')
     return request
 
 
@@ -173,7 +199,9 @@ async def pending_request(db, request_id, assistant):
 async def approve(request_id: int, payload: Optional[Allocation] = None, db: AsyncSession = Depends(get_db),
                   user: User = Depends(require_role(RoleEnum.ASSISTANT))):
     request = await pending_request(db, request_id, user)
-    assets = payload.unit_asset_ids if payload else request.unit_asset_ids
+    assets = request.unit_asset_ids
+    if payload and payload.unit_asset_ids and set(payload.unit_asset_ids) != set(assets):
+        raise HTTPException(409, 'Use the exact units reserved at event submission')
     if request.requested_items:
         if not assets:
             raise HTTPException(status_code=400, detail='Select the specific equipment units to allocate')
@@ -192,6 +220,13 @@ async def approve(request_id: int, payload: Optional[Allocation] = None, db: Asy
     elif payload and set(assets) != set(request.unit_asset_ids):
         raise HTTPException(status_code=400, detail='Selected units must match this existing asset request')
     try:
+        held = (await db.scalars(select(EquipmentUnit).where(EquipmentUnit.asset_id.in_(assets))
+            .order_by(EquipmentUnit.asset_id).with_for_update())).all()
+        if any(unit.status != UnitStatusEnum.RESERVED for unit in held):
+            raise HTTPException(409, 'An event reservation is no longer available')
+        for unit in held:
+            unit.status = UnitStatusEnum.AVAILABLE
+        await db.flush()
         event = await issue_approved_event(EventIssueCreate(event_name=request.event_name, purpose=request.purpose,
             coordinator_id=request.coordinator_id, due_date=request.due_date, unit_asset_ids=assets), db, user)
         request.unit_asset_ids = assets
@@ -214,9 +249,65 @@ async def reject(request_id: int, payload: Rejection, db: AsyncSession = Depends
     request = await pending_request(db, request_id, user)
     request.status = 'REJECTED'
     request.rejection_reason = payload.reason.strip()
+    await release_event(db, request)
     request.decided_by_id = user.id
     request.decided_at = datetime.now(timezone.utc)
     await create_notification(db, request.coordinator_id, 'Event Request Rejected',
         f'{request.event_name}: {request.rejection_reason}', NotificationTypeEnum.WARNING, NotificationCategoryEnum.REQUEST)
     await db.commit()
     return request
+
+
+async def release_event(db, request):
+    units = (await db.scalars(select(EquipmentUnit).where(EquipmentUnit.asset_id.in_(request.unit_asset_ids))
+        .order_by(EquipmentUnit.asset_id).with_for_update())).all()
+    for unit in units:
+        if unit.status == UnitStatusEnum.RESERVED:
+            unit.status = UnitStatusEnum.AVAILABLE
+
+
+class HodDecision(BaseModel):
+    approve: bool
+    reason: Optional[str] = Field(default=None, max_length=2000)
+
+
+@router.post('/requests/{request_id}/hod-review', response_model=EventRequestResponse)
+async def hod_review(request_id: int, body: HodDecision, db: AsyncSession = Depends(get_db),
+                     user: User = Depends(require_role(RoleEnum.FACULTY))):
+    request = await db.scalar(select(EventRequest).where(EventRequest.id == request_id).with_for_update())
+    if not request or not user.is_hod or request.hod_id != user.id:
+        raise HTTPException(403, 'Only the coordinator’s department HOD can review this request')
+    if request.status != 'PENDING' or request.hod_approved_at:
+        raise HTTPException(409, 'Request has already been reviewed')
+    now = datetime.now(timezone.utc)
+    if not request.approval_deadline or request.approval_deadline <= now:
+        raise HTTPException(409, 'Approval deadline has passed')
+    if body.approve:
+        request.hod_approved_at = now
+        request.collection_deadline = min(now + timedelta(days=7), request.due_date)
+        assistant = await db.scalar(select(LabAssistantAssignment.assistant_id).where(LabAssistantAssignment.lab_id == request.lab_id))
+        if assistant:
+            await notify(db, assistant, 'Event approved by HOD', f'Event request #{request.id} is ready for your approval and issue.')
+    else:
+        if not (body.reason or '').strip():
+            raise HTTPException(400, 'A rejection reason is required')
+        request.status = 'REJECTED'
+        request.rejection_reason = body.reason.strip()
+        request.decided_at = now
+        request.decided_by_id = user.id
+        await release_event(db, request)
+    await notify(db, request.coordinator_id, 'HOD event decision',
+        f'Event request #{request.id}: {"approved" if body.approve else "rejected: " + body.reason.strip()}.')
+    await db.commit()
+    return request
+
+
+async def expire_events(db, now):
+    rows = (await db.scalars(select(EventRequest).where(EventRequest.status == 'PENDING')
+        .order_by(EventRequest.id).with_for_update(skip_locked=True))).all()
+    for request in rows:
+        expires = request.collection_deadline or request.approval_deadline or request.due_date
+        if min(expires, request.due_date) <= now:
+            await release_event(db, request)
+            request.status = 'CANCELLED'
+            await notify(db, request.coordinator_id, 'Event reservation expired', f'Reserved equipment for event request #{request.id} has been released.')

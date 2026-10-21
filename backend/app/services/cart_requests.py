@@ -5,8 +5,9 @@ from sqlalchemy import select, func, delete
 from app.db.models import (CartItem, EquipmentModel, EquipmentUnit, Lab, Request,
                            RequestItem, RequestAllocation, Transaction, User,
                            RoleEnum, RequestStatusEnum as RS, TransactionStatusEnum as TS,
-                           UnitStatusEnum as US, RequestKindEnum, SystemSetting)
+                           UnitStatusEnum as US, RequestKindEnum, SystemSetting, LabAssistantAssignment)
 from app.schemas.borrowing import RequestResponse, RequestItemResponse
+from app.services.approvals import routing, stage, deadline, notify_next, hod_pending
 
 
 def free_units(model_id, lab_id):
@@ -38,8 +39,14 @@ async def request_response(db, request):
         .join(EquipmentModel, EquipmentModel.id == RequestItem.model_id)
         .join(Lab, Lab.id == RequestItem.lab_id).where(RequestItem.request_id == request.id)
         .order_by(RequestItem.id))).all()
+    lab_ids = {item.lab_id for item, _, _ in rows}
+    assistants = {row.lab_id: row for row in (await db.execute(
+        select(LabAssistantAssignment.lab_id, User.id, User.name)
+        .join(User, User.id == LabAssistantAssignment.assistant_id)
+        .where(LabAssistantAssignment.lab_id.in_(lab_ids)))).all()} if lab_ids else {}
     items = []
     for item, name, lab_name in rows:
+        assistant = assistants.get(item.lab_id)
         allocations = (await db.scalars(select(RequestAllocation.asset_id)
             .where(RequestAllocation.request_item_id == item.id).order_by(RequestAllocation.asset_id))).all()
         counts = (await db.execute(select(func.count(Transaction.id),
@@ -47,9 +54,16 @@ async def request_response(db, request):
             .where(Transaction.request_item_id == item.id))).one()
         items.append(RequestItemResponse(id=item.id, model_id=item.model_id, equipment_name=name,
             lab_id=item.lab_id, lab_name=lab_name, quantity=item.quantity, status=item.status,
-            reserved_asset_ids=list(allocations), issued_quantity=counts[0], returned_quantity=counts[1]))
+            reserved_asset_ids=list(allocations), issued_quantity=counts[0], returned_quantity=counts[1],
+            requires_hod_approval=item.requires_hod_approval, approval_stage=stage(request, item),
+            collection_deadline=None if hod_pending(request) else item.collection_deadline))
+        items[-1].assistant_id = assistant.id if assistant else None
+        items[-1].assistant_name = assistant.name if assistant else None
     user = await db.get(User, request.requester_id)
+    faculty = await db.get(User, request.faculty_id) if request.faculty_id else None
+    hod = await db.get(User, request.hod_id) if request.hod_id else None
     return response.model_copy(update={'items': items, 'requester_name': user.name,
+                                      'faculty_name': faculty.name if faculty else None, 'hod_name': hod.name if hod else None,
                                       'requester_role': user.role.value})
 
 
@@ -70,7 +84,7 @@ async def sync_request_status(db, request):
         request.status = RS.RETURNED
     elif RS.REJECTED in statuses:
         request.status = RS.REJECTED
-        request.rejection_reason = 'Requested items were rejected by their lab assistants'
+        request.rejection_reason = request.rejection_reason or 'Requested items were rejected'
     else:
         request.status = RS.CANCELLED
 
@@ -93,7 +107,7 @@ async def validate_policy(db, user, start, due, quantity):
             # Partial pickups and returns must not double-count units already issued.
             issued = await db.scalar(select(func.count(Transaction.id)).where(Transaction.request_id == request.id))
             rejected = await db.scalar(select(func.coalesce(func.sum(RequestItem.quantity), 0)).where(
-                RequestItem.request_id == request.id, RequestItem.status == RS.REJECTED))
+                RequestItem.request_id == request.id, RequestItem.status.in_([RS.REJECTED, RS.CANCELLED])))
             outstanding += max(0, request.quantity - issued - rejected)
         limit = values.get('STUDENT_MAX_ITEMS', 3)
         if active + outstanding + quantity > limit:
@@ -101,7 +115,7 @@ async def validate_policy(db, user, start, due, quantity):
 
 
 async def allocate_request(db, user, selections, start, due, purpose, *, key=None,
-                           kind=RequestKindEnum.STANDARD, clear_cart=False):
+                           kind=RequestKindEnum.STANDARD, clear_cart=False, faculty_id=None):
     if user.role not in (RoleEnum.STUDENT, RoleEnum.FACULTY):
         raise HTTPException(403, 'Only students and faculty may request equipment')
     # One borrower cannot evade their item limit with concurrent submissions.
@@ -117,7 +131,7 @@ async def allocate_request(db, user, selections, start, due, purpose, *, key=Non
             before = sorted((item.model_id, item.lab_id, item.quantity) for item in previous)
             after = sorted((item.model_id, item.lab_id, item.quantity) for item in selections)
             if (before != after or existing.required_from != start or existing.required_until != due
-                    or existing.purpose != purpose or existing.kind != kind):
+                    or existing.purpose != purpose or existing.kind != kind or existing.faculty_id != faculty_id):
                 raise HTTPException(409, 'Submission key was already used for a different request')
             return existing
     await validate_policy(db, user, start, due, sum(item.quantity for item in selections))
@@ -130,11 +144,15 @@ async def allocate_request(db, user, selections, start, due, purpose, *, key=Non
             raise HTTPException(409, {'code': 'CART_CHANGED', 'message': 'Your cart changed. Review it again before submitting.'})
     allocations = []
     shortages = []
+    models = {}
     for item in ordered:
         model = await db.get(EquipmentModel, item.model_id)
         lab = await db.get(Lab, item.lab_id)
         if not model or not lab:
             raise HTTPException(404, 'Equipment type or lab no longer exists')
+        models[model.id] = model
+        if kind in (RequestKindEnum.QUICK_BORROW, RequestKindEnum.WALK_IN) and model.requires_hod_approval:
+            raise HTTPException(400, 'Equipment requiring HOD approval cannot be issued through quick borrow or walk-in')
         units = (await db.scalars(free_units(item.model_id, item.lab_id)
             .order_by(EquipmentUnit.asset_id).with_for_update(skip_locked=True)
             .limit(item.quantity))).all()
@@ -150,14 +168,21 @@ async def allocate_request(db, user, selections, start, due, purpose, *, key=Non
     # Legacy model/lab columns remain the first item's references for compatibility.
     # request_items is authoritative for combined requests and per-lab authorization.
     first = ordered[0]
+    faculty, hod = await routing(db, user, faculty_id, any(model.requires_hod_approval for model in models.values()))
+    now = datetime.now(timezone.utc)
     request = Request(requester_id=user.id, model_id=first.model_id, lab_id=first.lab_id,
         quantity=sum(item.quantity for item in ordered), required_from=start, required_until=due,
-        kind=kind, purpose=purpose, submission_key=key, status=RS.PENDING)
+        kind=kind, purpose=purpose, submission_key=key, status=RS.PENDING,
+        faculty_id=faculty.id if faculty else None, hod_id=hod.id if hod else None,
+        approval_deadline=min(now + timedelta(days=7), due))
     db.add(request)
     await db.flush()
     for selected, units in allocations:
         item = RequestItem(request_id=request.id, model_id=selected.model_id,
-                           lab_id=selected.lab_id, quantity=selected.quantity, status=RS.PENDING)
+                           lab_id=selected.lab_id, quantity=selected.quantity, status=RS.PENDING,
+                           requires_hod_approval=models[selected.model_id].requires_hod_approval and not user.is_hod)
+        if not faculty and not hod:
+            item.collection_deadline = min(now + timedelta(days=7), due)
         db.add(item)
         await db.flush()
         for unit in units:
@@ -166,6 +191,8 @@ async def allocate_request(db, user, selections, start, due, purpose, *, key=Non
     if clear_cart:
         await db.execute(delete(CartItem).where(CartItem.user_id == user.id))
     await db.flush()
+    items = (await db.scalars(select(RequestItem).where(RequestItem.request_id == request.id))).all()
+    await notify_next(db, request, items)
     return request
 
 
@@ -187,19 +214,27 @@ async def expire_allocations(now=None):
     from app.db.models import NotificationTypeEnum, NotificationCategoryEnum
     now = now or datetime.now(timezone.utc)
     async with AsyncSessionLocal() as db:
-        requests = (await db.scalars(select(Request).where(Request.required_until <= now,
+        requests = (await db.scalars(select(Request).where(
             select(RequestItem.id).where(RequestItem.request_id == Request.id,
                                          RequestItem.status.in_([RS.PENDING, RS.APPROVED])).exists())
             .order_by(Request.id).with_for_update(skip_locked=True))).all()
         for request in requests:
+            expired = False
             items = (await db.scalars(select(RequestItem).where(RequestItem.request_id == request.id,
                                                        RequestItem.status.in_([RS.PENDING, RS.APPROVED])))).all()
             for item in items:
+                if deadline(request, item) > now:
+                    continue
+                expired = True
                 await release_item(db, item)
                 item.status = RS.CANCELLED
+            if not expired:
+                continue
             await db.flush()
             await sync_request_status(db, request)
             await create_notification(db, request.requester_id, 'Uncollected Request Items Expired',
-                f'Uncollected items in request #{request.id} expired at their return deadline. Their reserved stock has been released.',
+                f'Items in request #{request.id} reached their approval, collection or return deadline. Expired reservations have been released.',
                 NotificationTypeEnum.WARNING, NotificationCategoryEnum.REQUEST)
+        from app.api.endpoints.events import expire_events
+        await expire_events(db, now)
         await db.commit()

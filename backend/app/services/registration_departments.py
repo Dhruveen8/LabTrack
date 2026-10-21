@@ -7,8 +7,6 @@ REGISTRATION_DEPARTMENTS = {
     'CE': 'Computer Engineering',
     'CSE': 'Computer Science Engineering',
     'IT': 'Information Technology',
-    'AIML': 'Artificial Intelligence and Machine Learning',
-    'EC': 'Electronics and Communication',
 }
 
 

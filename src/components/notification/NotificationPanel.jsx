@@ -48,6 +48,8 @@ export const NotificationPanel = ({ onClose }) => {
         top: '100%',
         marginTop: '8px',
         width: '360px',
+        maxWidth: 'calc(100vw - 2rem)',
+        color: 'var(--color-text-main)',
         backgroundColor: '#ffffff',
         border: '1px solid #e2e8f0',
         borderRadius: '8px',
@@ -70,8 +72,9 @@ export const NotificationPanel = ({ onClose }) => {
           <Bell size={16} /> Notifications {role === 'admin' ? '(Executive)' : ''}
         </div>
         <button
+          type="button"
+          className="btn btn-secondary"
           onClick={markAllNotificationsRead}
-          style={{ background: 'none', border: 'none', color: '#1e40af', fontSize: '0.75rem', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '2px' }}
         >
           <CheckCheck size={14} /> Mark all read
         </button>

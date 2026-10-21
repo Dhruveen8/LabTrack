@@ -25,7 +25,7 @@ export const PageHeader = ({ title, subtitle, actions }) => {
         )}
       </div>
       {actions && (
-        <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+        <div style={{ display: 'flex', alignItems: 'center', flexWrap: 'wrap', gap: '0.5rem' }}>
           {actions}
         </div>
       )}

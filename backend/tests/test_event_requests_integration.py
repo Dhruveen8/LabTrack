@@ -33,6 +33,12 @@ async def test_event_request_api_with_real_transactions():
                 department = Department(name='Event regression', code=f'EV{suffix}')
                 db.add_all([faculty, assistant, department])
                 await db.flush()
+                faculty.department_id = assistant.department_id = department.id
+                hod = User(name='Event HOD', email=f'event.hod.{suffix}@charusat.ac.in', role=RoleEnum.FACULTY,
+                    department_id=department.id, is_hod=True)
+                db.add(hod)
+                await db.flush()
+                hod_id = hod.id
                 lab = Lab(name='Event test lab', code=f'EV{suffix.upper()}', department_id=department.id)
                 db.add(lab)
                 await db.flush()
@@ -46,7 +52,8 @@ async def test_event_request_api_with_real_transactions():
                 faculty_id, assistant_id, lab_id = faculty.id, assistant.id, lab.id
                 model_ids = [model.id for model in models]
                 assets = [unit.asset_id for unit in units]
-                current = SimpleNamespace(id=faculty_id, name=faculty.name, role=RoleEnum.FACULTY)
+                current = SimpleNamespace(id=faculty_id, name=faculty.name, role=RoleEnum.FACULTY, is_hod=False, department_id=department.id)
+                faculty_identity = current
                 app = FastAPI()
                 app.include_router(router)
 
@@ -66,15 +73,20 @@ async def test_event_request_api_with_real_transactions():
                     response = await client.post('/requests', json=payload)
                     assert response.status_code == 200, response.text
                     request = response.json()
-                    assert request['status'] == 'PENDING' and request['unit_asset_ids'] == []
+                    assert request['status'] == 'PENDING' and len(request['unit_asset_ids']) == 2
+                    assert request['hod_id'] == hod_id
                     assert len(request['requested_items']) == 2
                     count = (await db.execute(select(func.count()).select_from(Transaction).where(Transaction.borrower_id == faculty_id))).scalar_one()
                     assert count == 0
                     current = SimpleNamespace(id=assistant_id, name='Assistant', role=RoleEnum.ASSISTANT)
                     path = f'/requests/{request["id"]}/approve'
-                    # Missing allocation and wrong quantities must leave the batch untouched.
-                    assert (await client.post(path)).status_code == 400
-                    assert (await client.post(path, json={'unit_asset_ids': [assets[0], assets[2]]})).status_code == 400
+                    # Assistant cannot bypass HOD; assets are fixed at submission.
+                    assert (await client.post(path)).status_code == 409
+                    current = SimpleNamespace(id=hod_id, name='HOD', role=RoleEnum.FACULTY, is_hod=True)
+                    reviewed = await client.post(f'/requests/{request["id"]}/hod-review', json={'approve': True})
+                    assert reviewed.status_code == 200, reviewed.text
+                    current = SimpleNamespace(id=assistant_id, name='Assistant', role=RoleEnum.ASSISTANT)
+                    assert (await client.post(path, json={'unit_asset_ids': [assets[0], assets[2]]})).status_code == 409
                     response = await client.post(path, json={'unit_asset_ids': assets[:2]})
                     assert response.status_code == 200, response.text
                     assert response.json()['status'] == 'APPROVED'
@@ -82,12 +94,14 @@ async def test_event_request_api_with_real_transactions():
                     assert len(loans) == 2 and {loan.unit_asset_id for loan in loans} == set(assets[:2])
                     assert (await client.post(path, json={'unit_asset_ids': assets[:2]})).status_code == 409
                     # Existing requests that contain asset IDs still work after the migration.
-                    current = SimpleNamespace(id=faculty_id, name='Faculty', role=RoleEnum.FACULTY)
+                    current = faculty_identity
                     legacy = {key: value for key, value in payload.items() if key not in ('requested_items', 'lab_id')}
                     legacy['unit_asset_ids'] = assets[2:]
                     response = await client.post('/requests', json=legacy)
                     assert response.status_code == 200, response.text
                     legacy_id = response.json()['id']
+                    current = SimpleNamespace(id=hod_id, name='HOD', role=RoleEnum.FACULTY, is_hod=True)
+                    assert (await client.post(f'/requests/{legacy_id}/hod-review', json={'approve': True})).status_code == 200
                     current = SimpleNamespace(id=assistant_id, name='Assistant', role=RoleEnum.ASSISTANT)
                     response = await client.post(f'/requests/{legacy_id}/approve')
                     assert response.status_code == 200, response.text

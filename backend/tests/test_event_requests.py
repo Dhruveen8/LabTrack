@@ -38,25 +38,27 @@ def result(value=None, rows=None):
     response.scalar_one.return_value = value
     response.scalar_one_or_none.return_value = value
     response.scalars.return_value.all.return_value = rows or []
+    response.all.return_value = rows or []
     return response
 
 
 def database():
     return SimpleNamespace(get=AsyncMock(), execute=AsyncMock(), add=MagicMock(),
-                           flush=AsyncMock(), commit=AsyncMock(), rollback=AsyncMock())
+                           scalars=AsyncMock(), flush=AsyncMock(), commit=AsyncMock(), rollback=AsyncMock())
 
 
 @pytest.mark.asyncio
-async def test_submission_defers_physical_allocation(monkeypatch):
+async def test_submission_reserves_physical_units(monkeypatch):
     db = database()
-    db.get.side_effect = [SimpleNamespace(lab_id=10, name='Arduino'),
+    db.get.side_effect = [SimpleNamespace(id=20, lab_id=10, name='Arduino'),
                           SimpleNamespace(account_status=AccountStatusEnum.ACTIVE)]
-    db.execute.side_effect = [result(3), result(7)]
+    db.execute.side_effect = [result(), result(3), result(7)]
+    db.scalars.return_value = result(rows=[unit('A'), unit('B')])
     notification = AsyncMock()
     monkeypatch.setattr(events, 'create_notification', notification)
-    faculty = SimpleNamespace(id=5, name='Faculty')
+    faculty = SimpleNamespace(id=5, name='Faculty', is_hod=True)
     request = await events.submit_request(events.EventRequestCreate(**body()), db, faculty)
-    assert request.unit_asset_ids == []
+    assert request.unit_asset_ids == ['A', 'B']
     assert request.requested_items == [{'model_id': 20, 'quantity': 2}]
     assert request.lab_id == 10 and request.coordinator_id == 5
     assert '2 units' in notification.call_args.args[3]
@@ -79,7 +81,8 @@ async def test_submission_rejects_foreign_models_and_insufficient_stock(lab, ava
 def request_row():
     return SimpleNamespace(id=1, status='PENDING', lab_id=10, coordinator_id=5,
                            event_name='Robotics Club', purpose='Workshop', due_date=body()['due_date'],
-                           requested_items=[{'model_id': 20, 'quantity': 2}], unit_asset_ids=[])
+                           requested_items=[{'model_id': 20, 'quantity': 2}], unit_asset_ids=['A', 'B'],
+                           hod_id=None, hod_approved_at=None, collection_deadline=body()['due_date'])
 
 
 def unit(asset, model=20, lab=10):
@@ -91,6 +94,9 @@ def approval(monkeypatch):
     db = database()
     request = request_row()
     db.execute.side_effect = [result(request), result(rows=[unit('A'), unit('B')])]
+    held = [unit('A'), unit('B')]
+    for row in held: row.status = UnitStatusEnum.RESERVED
+    db.scalars.return_value = result(rows=held)
     monkeypatch.setattr(events, 'get_assistant_labs', AsyncMock(return_value=[10]))
     issue = AsyncMock(return_value=SimpleNamespace(id=99))
     monkeypatch.setattr(events, 'issue_approved_event', issue)
@@ -121,11 +127,11 @@ async def test_bad_allocation_never_issues(approval, units):
 
 
 @pytest.mark.asyncio
-async def test_missing_allocation_never_issues(approval):
+async def test_changed_reserved_assets_never_issue(approval):
     db, request, issue = approval
     with pytest.raises(HTTPException) as failure:
-        await events.approve(1, None, db, SimpleNamespace(id=7))
-    assert failure.value.status_code == 400
+        await events.approve(1, events.Allocation(unit_asset_ids=['C']), db, SimpleNamespace(id=7))
+    assert failure.value.status_code == 409
     issue.assert_not_awaited()
 
 

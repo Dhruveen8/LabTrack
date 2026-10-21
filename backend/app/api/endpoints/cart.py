@@ -5,7 +5,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.exc import IntegrityError
 from app.api.deps import require_role
 from app.db.database import get_db
-from app.db.models import CartItem, EquipmentModel, Lab, User, RoleEnum
+from app.db.models import CartItem, EquipmentModel, Lab, User, RoleEnum, RequestKindEnum
 from app.schemas.borrowing import CartQuantity, CartSubmit, RequestResponse
 from app.services.cart_requests import cart_snapshot, allocate_request, request_response
 
@@ -46,8 +46,10 @@ async def remove_cart_item(model_id: int, lab_id: int,
 async def submit_cart(body: CartSubmit, db: AsyncSession = Depends(get_db),
                       user: User = Depends(require_role(RoleEnum.STUDENT))):
     try:
+        if body.kind not in (RequestKindEnum.STANDARD, RequestKindEnum.WALK_IN):
+            raise HTTPException(400, 'Student carts support standard or small-equipment walk-in requests only')
         request = await allocate_request(db, user, body.items, body.required_from,
-            body.required_until, body.purpose, key=body.submission_key, clear_cart=True)
+            body.required_until, body.purpose, key=body.submission_key, clear_cart=True, faculty_id=body.faculty_id, kind=body.kind)
         await db.commit()
         return await request_response(db, request)
     except HTTPException:

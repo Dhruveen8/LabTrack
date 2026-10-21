@@ -85,6 +85,7 @@ async def list_equipment_models(
             description=m.description,
             lab_id=m.lab_id,
             equipment_type=m.equipment_type,
+            requires_hod_approval=m.requires_hod_approval,
             total_quantity=unit_counts.get(m.id, 0),
             available_quantity=available_counts.get(m.id, 0)
         ))
@@ -96,7 +97,7 @@ async def update_equipment_model(
     model_id: int,
     model_update: EquipmentModelUpdate,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(require_admin)
+    current_user: User = Depends(require_role([RoleEnum.ADMIN, RoleEnum.ASSISTANT]))
 ):
     result = await db.execute(select(EquipmentModel).where(EquipmentModel.id == model_id))
     eq_model = result.scalars().first()
@@ -104,6 +105,11 @@ async def update_equipment_model(
         raise HTTPException(status_code=404, detail="Equipment model not found")
 
     update_data = model_update.model_dump(exclude_unset=True)
+    if current_user.role == RoleEnum.ASSISTANT:
+        if eq_model.lab_id not in await get_assistant_labs(db, current_user.id):
+            raise HTTPException(403, 'Not authorized for this lab')
+        if set(update_data) != {'requires_hod_approval'} or update_data['requires_hod_approval'] is None:
+            raise HTTPException(403, 'Assistants may change only the HOD approval requirement')
     for field, value in update_data.items():
         setattr(eq_model, field, value)
 

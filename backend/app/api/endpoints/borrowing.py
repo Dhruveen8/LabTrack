@@ -34,12 +34,50 @@ from app.schemas.borrowing import (
     QuickBorrowRequest, WalkInIssueRequest, EventIssueCreate
 )
 from app.schemas.borrowing import CartSelection
+from pydantic import BaseModel, Field
+from app.services.approvals import decide, stage, hod_pending
 from app.services.cart_requests import allocate_request, request_response
 from app.services.request_fulfillment import decide_items, checkout_allocated, sync_returned_item
 from app.api.deps import get_current_user, require_role
 from app.api.endpoints.notifications import create_notification
 
 router = APIRouter()
+
+
+class ApprovalDecision(BaseModel):
+    approve: bool
+    reason: str | None = Field(default=None, max_length=2000)
+
+
+@router.post('/requests/{request_id}/review', response_model=RequestResponse)
+async def review_request(request_id: int, body: ApprovalDecision, db: AsyncSession = Depends(get_db),
+                         user: User = Depends(require_role(RoleEnum.FACULTY))):
+    request = await db.scalar(select(Request).where(Request.id == request_id).with_for_update())
+    if not request:
+        raise HTTPException(404, 'Request not found')
+    return await decide(db, request, user, body.approve, body.reason)
+
+
+@router.post('/requests/{request_id}/cancel', response_model=RequestResponse)
+async def cancel_request(request_id: int, db: AsyncSession = Depends(get_db), user: User = Depends(get_current_user)):
+    from app.services.cart_requests import release_item, sync_request_status
+    request = await db.scalar(select(Request).where(Request.id == request_id).with_for_update())
+    if not request or request.requester_id != user.id:
+        raise HTTPException(404, 'Request not found')
+    items = (await db.scalars(select(RequestItem).where(RequestItem.request_id == request.id,
+        RequestItem.status.in_([RequestStatusEnum.PENDING, RequestStatusEnum.APPROVED])))).all()
+    if not items:
+        raise HTTPException(409, 'No unissued items remain to cancel')
+    for item in items:
+        await release_item(db, item)
+        item.status = RequestStatusEnum.CANCELLED
+    await db.flush()
+    await sync_request_status(db, request)
+    await create_notification(db, user.id, 'Request reservations cancelled',
+        f'Unissued reservations for request #{request.id} were released. Equipment already issued must still be returned.',
+        NotificationTypeEnum.INFO, NotificationCategoryEnum.REQUEST)
+    await db.commit()
+    return await request_response(db, request)
 
 
 def quick_borrow_deadline(required_from, role):
@@ -81,7 +119,7 @@ async def create_request(
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user)
 ):
-    if req_in.kind not in (None, RequestKindEnum.STANDARD, RequestKindEnum.QUICK_BORROW):
+    if req_in.kind not in (None, RequestKindEnum.STANDARD, RequestKindEnum.QUICK_BORROW, RequestKindEnum.WALK_IN):
         raise HTTPException(400, 'Use the counter or event workflow for this request kind')
     model = await db.get(EquipmentModel, req_in.model_id)
     if not model:
@@ -92,7 +130,7 @@ async def create_request(
         request = await allocate_request(db, current_user,
             [CartSelection(model_id=model.id, lab_id=model.lab_id, quantity=req_in.quantity or 1)],
             req_in.required_from, due, req_in.purpose,
-            kind=req_in.kind or RequestKindEnum.STANDARD)
+            kind=req_in.kind or RequestKindEnum.STANDARD, faculty_id=req_in.faculty_id)
         await db.commit()
         return await request_response(db, request)
     except HTTPException:
@@ -114,7 +152,10 @@ async def get_pending_requests(
             RequestItem.request_id == Request.id, RequestItem.lab_id.in_(lab_ids)).exists()))
         .where(Request.status == RequestStatusEnum.PENDING)
     )
-    return [await request_response(db, request) for request in result.scalars().all()]
+    responses = [await request_response(db, request) for request in result.scalars().all()]
+    return [response for response in responses if not response.items or any(
+        item.lab_id in lab_ids and item.status == RequestStatusEnum.PENDING and item.approval_stage == 'ASSISTANT'
+        for item in response.items)]
 
 
 @router.get("/requests", response_model=List[RequestResponse])
@@ -130,9 +171,19 @@ async def list_all_requests(
             return []
         result = await db.execute(select(Request).where(or_(Request.lab_id.in_(lab_ids), select(RequestItem.id).where(
             RequestItem.request_id == Request.id, RequestItem.lab_id.in_(lab_ids)).exists())))
+    elif current_user.role == RoleEnum.FACULTY:
+        result = await db.execute(select(Request).where(or_(Request.requester_id == current_user.id,
+            Request.faculty_id == current_user.id, Request.hod_id == current_user.id)))
     else:
         result = await db.execute(select(Request).where(Request.requester_id == current_user.id))
-    return [await request_response(db, request) for request in result.scalars().all()]
+    responses = []
+    for request in result.scalars().all():
+        response = await request_response(db, request)
+        if current_user.role == RoleEnum.ASSISTANT and hod_pending(request) and not any(
+                item.status in (RequestStatusEnum.ISSUED, RequestStatusEnum.RETURNED) for item in response.items):
+            continue
+        responses.append(response)
+    return responses
 
 
 @router.get("/transactions", response_model=List[TransactionResponse])
@@ -555,7 +606,7 @@ async def quick_borrow(
 
     model_result = await db.execute(select(EquipmentModel).where(EquipmentModel.id == unit.model_id))
     eq_model = model_result.scalars().first()
-    if not eq_model or eq_model.equipment_type != EquipmentTypeEnum.QUICK_BORROW:
+    if not eq_model or eq_model.requires_hod_approval:
         raise HTTPException(status_code=400, detail="This equipment is not configured for quick-borrow")
 
     lab_ids = await get_assistant_labs(db, current_user.id)
@@ -569,6 +620,8 @@ async def quick_borrow(
         raise HTTPException(status_code=404, detail="Borrower not found")
     if borrower.role != RoleEnum.FACULTY:
         raise HTTPException(status_code=403, detail="Only faculty members can borrow equipment daily via Quick Borrow")
+    if borrower.account_status.value != 'ACTIVE':
+        raise HTTPException(403, 'Borrower account must be active')
 
     # Use institution's local timezone end-of-day (UTC+5:30 for India)
     from datetime import timezone as tz
@@ -650,6 +703,8 @@ async def walk_in_issue(
 
         model_result = await db.execute(select(EquipmentModel).where(EquipmentModel.id == unit.model_id))
         eq_model = model_result.scalars().first()
+        if eq_model.requires_hod_approval:
+            raise HTTPException(400, 'Walk-ins are only allowed for equipment without an HOD approval requirement')
 
         # FIX: Check unit's current lab, not model's original lab
         lab_ids = await get_assistant_labs(db, current_user.id)
@@ -660,6 +715,11 @@ async def walk_in_issue(
         borrower = borrower_result.scalars().first()
         if not borrower:
             raise HTTPException(status_code=404, detail="Borrower not found")
+
+        if borrower.account_status.value != 'ACTIVE' or borrower.role not in (RoleEnum.STUDENT, RoleEnum.FACULTY):
+            raise HTTPException(403, 'Borrower must be an active student or faculty member')
+        if borrower.role == RoleEnum.STUDENT:
+            raise HTTPException(409, 'Student walk-ins require a faculty-approved walk-in request. Submit it from the student portal, then use reserved checkout.')
 
         # Normalize due_date to be timezone-aware
         due_date = walkin_req.due_date

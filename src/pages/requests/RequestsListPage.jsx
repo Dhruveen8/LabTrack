@@ -5,15 +5,24 @@ import { requestHasLab, requestHasStage, cartError } from '../../utils/cart';
 import { PageHeader } from '../../components/common/PageHeader';
 import { DataTable } from '../../components/common/DataTable';
 import { StatusBadge } from '../../components/common/StatusBadge';
-import { Link, useNavigate } from 'react-router-dom';
-import { Send, CheckCircle, XCircle, RefreshCw, QrCode, Sparkles } from 'lucide-react';
+import { ApprovalQueue } from '../../components/common/ApprovalQueue';
+import { RequestTrackingButton } from '../../components/common/RequestTrackingButton';
+import apiClient from '../../api/client';
+import { Link, useNavigate, useSearchParams } from 'react-router-dom';
+import { approvalQueue } from '../../utils/approvalQueue';
+import { Send, CheckCircle, XCircle, RefreshCw, QrCode, Sparkles, ClipboardCheck, ListFilter } from 'lucide-react';
+import './RequestsListPage.css';
 
 export const RequestsListPage = () => {
   const { user } = useAuth();
   const { addToast } = useToast();
-  const { requestsList, transactionsList, updateRequestStatusAction, approveExtensionAction } = useLabTrack();
+  const { requestsList, transactionsList, updateRequestStatusAction, approveExtensionAction, refreshData } = useLabTrack();
   const [filterStatus, setFilterStatus] = useState('ALL');
   const navigate = useNavigate();
+  const [searchParams, setSearchParams] = useSearchParams();
+  const isReviewer = user?.role === 'faculty';
+  const reviewing = isReviewer && searchParams.get('view') !== 'all';
+  const pendingApprovals = approvalQueue(requestsList, user).length;
 
   const isAssistant = user?.role === 'assistant';
   const assignedLabIds = user?.assignedLabIds || [];
@@ -22,7 +31,7 @@ export const RequestsListPage = () => {
   let visibleRequests = requestsList;
   if (isAssistant && assignedLabIds.length > 0) {
     visibleRequests = requestsList.filter(r => requestHasLab(r, assignedLabIds));
-  } else if (user?.role === 'student' || user?.role === 'faculty') {
+  } else if (user?.role === 'student') {
     visibleRequests = requestsList.filter(r => r.requesterId === user.id || r.requesterName === user.name);
   }
 
@@ -72,9 +81,11 @@ export const RequestsListPage = () => {
           {row.items?.length ? row.items.map(item => <div key={item.id} style={{ marginBottom: '8px' }}>
             <strong>{item.equipment_name} × {item.quantity}</strong>
             <div style={{ fontSize: '.75rem', color: '#64748b' }}>{item.lab_name} · {item.status} · {item.issued_quantity} issued / {item.returned_quantity} returned</div>
+            {item.collection_deadline && <div>Collect by: {formatDate(item.collection_deadline)}</div>}
           </div>) : <div style={{ fontWeight: 600, color: '#0f172a' }}>{row.equipmentName}</div>}
           {row.kind === 'QUICK_BORROW' && <span className="badge badge-warning">Quick Borrow · Same-day return</span>}
           <div style={{ fontSize: '0.75rem', color: '#64748b' }}>{row.labName} (Qty: {row.quantity || 1})</div>
+          {row.rejectionReason && <div>Reason: {row.rejectionReason}</div>}
         </div>
       )
     },
@@ -97,6 +108,7 @@ export const RequestsListPage = () => {
     {
       header: 'Status',
       cell: (row) => {
+        if (row.items?.length) return <RequestTrackingButton request={row} />;
         if (row.status === 'Approved') {
           return (
             <div>
@@ -139,33 +151,40 @@ export const RequestsListPage = () => {
     {
       header: 'Actions',
       cell: (row) => (
-        <div style={{ display: 'flex', gap: '0.35rem', flexWrap: 'wrap' }}>
+        <div className="requests-page__actions">
+          {row.requesterId === user.id && row.items?.some(item => ['PENDING', 'APPROVED'].includes(item.status)) &&
+            <button type="button" className="btn btn-secondary" onClick={async () => {
+              try { await apiClient.post(`/borrowing/requests/${row.id}/cancel`); await refreshData(); }
+              catch (error) { addToast(cartError(error), 'error'); }
+            }}><XCircle size={16} aria-hidden="true" />Cancel unissued items</button>}
           {/* ONLY Assistant has the right to approve requests */}
-          {isAssistant && requestHasStage(row, 'PENDING', assignedLabIds) && (
+          {isAssistant && row.items?.some(item => item.status === 'PENDING' && item.approval_stage === 'ASSISTANT' && assignedLabIds.includes(item.lab_id)) && (
             <>
               <button
-                className="btn btn-primary btn-sm"
+                type="button"
+                className="btn btn-primary"
                 onClick={() => handleApprove(row)}
                 title="Approve for physical pickup"
               >
-                <CheckCircle size={13} /> Approve
+                <CheckCircle size={16} aria-hidden="true" /> Approve
               </button>
               <button
-                className="btn btn-primary btn-sm"
+                type="button"
+                className="btn btn-primary"
                 onClick={async () => {
                   if (!await handleApprove(row)) return;
                   navigate(`/issue-equipment?autoRequestId=${row.id}`);
                 }}
-                style={{ backgroundColor: '#0ea5e9', borderColor: '#0284c7' }}
                 title="Approve and immediately go to checkout counter"
               >
-                <Sparkles size={13} /> Approve & Issue Now
+                <Sparkles size={16} aria-hidden="true" /> Approve & Issue Now
               </button>
               <button
-                className="btn btn-danger btn-sm"
+                type="button"
+                className="btn btn-danger"
                 onClick={() => handleReject(row)}
               >
-                <XCircle size={13} /> Reject
+                <XCircle size={16} aria-hidden="true" /> Reject
               </button>
             </>
           )}
@@ -173,25 +192,25 @@ export const RequestsListPage = () => {
           {/* Assistant approval for digital extension */}
           {isAssistant && row.status === 'Extension_Pending' && (
             <button
-              className="btn btn-primary btn-sm"
-              style={{ backgroundColor: '#15803d', borderColor: '#15803d' }}
+              type="button"
+              className="btn btn-primary"
               onClick={() => handleApproveExtension(row)}
             >
-              <CheckCircle size={13} /> Approve Extension
+              <CheckCircle size={16} aria-hidden="true" /> Approve Extension
             </button>
           )}
 
           {/* Quick link to counter if approved */}
           {isAssistant && requestHasStage(row, 'APPROVED', assignedLabIds) && (
-            <Link to="/issue-equipment" className="btn btn-secondary btn-sm">
-              <QrCode size={13} /> Go to Counter
+            <Link to="/issue-equipment" className="btn btn-secondary">
+              <QrCode size={16} aria-hidden="true" /> Go to Counter
             </Link>
           )}
 
           {/* Borrower action: request extension if already issued */}
           {(user?.role === 'student' || user?.role === 'faculty') && row.status === 'Issued' && row.kind !== 'QUICK_BORROW' && (
-            <Link to={`/extend-request/${row.id}`} className="btn btn-secondary btn-sm">
-              <RefreshCw size={13} /> Request Extension
+            <Link to={`/extend-request/${row.id}`} className="btn btn-secondary">
+              <RefreshCw size={16} aria-hidden="true" /> Request Extension
             </Link>
           )}
         </div>
@@ -200,12 +219,13 @@ export const RequestsListPage = () => {
   ];
 
   return (
-    <div>
+    <div className="requests-page">
       <PageHeader
         title="Laboratory Equipment Borrowing Requests"
         subtitle={
           isAssistant
             ? "Review and approve student and faculty checkout requests for your assigned laboratories"
+            : isReviewer ? "Review requests awaiting your approval, or view all requests and their progress"
             : "Track your submitted reservation requests and pickup approvals"
         }
         actions={
@@ -216,33 +236,41 @@ export const RequestsListPage = () => {
           )
         }
       />
+      {isReviewer && <div className="requests-page__view-switch" role="group" aria-label="Request view">
+        <button type="button" className={`btn ${reviewing ? 'btn-primary' : 'btn-secondary'}`} aria-pressed={reviewing}
+          onClick={() => setSearchParams({ view: 'approvals' })}><ClipboardCheck size={16} aria-hidden="true" />Awaiting my approval <span className="requests-page__count">{pendingApprovals}</span></button>
+        <button type="button" className={`btn ${!reviewing ? 'btn-primary' : 'btn-secondary'}`} aria-pressed={!reviewing}
+          onClick={() => setSearchParams({ view: 'all' })}><ListFilter size={16} aria-hidden="true" />All requests</button>
+      </div>}
+      {reviewing && <ApprovalQueue />}
 
       {/* Role explanation alert for Admin */}
       {user?.role === 'admin' && (
         <div className="portal-card" style={{ backgroundColor: '#eff6ff', borderColor: '#bfdbfe', marginBottom: '1rem', padding: '0.75rem 1rem' }}>
           <div style={{ fontSize: '0.85rem', color: '#1e3a8a' }}>
-            <strong>Admin View Only:</strong> Equipment checkout approvals are delegated exclusively to Lab Assistants managing each laboratory. Admin manages laboratory assignments and department resources.
+            <strong>Admin View:</strong> Faculty and HODs review academic approvals. Assigned lab assistants approve fulfillment and issue equipment.
           </div>
         </div>
       )}
 
       {/* Filter Tabs */}
-      <div style={{ display: 'flex', gap: '0.5rem', marginBottom: '1rem', flexWrap: 'wrap' }}>
+      {!reviewing && <div className="requests-page__filters" role="group" aria-label="Filter requests by status">
         {['ALL', 'Pending', 'Approved', 'Extension_Pending', 'Issued', 'Returned', 'Rejected', 'Cancelled'].map(status => (
           <button
             key={status}
             onClick={() => setFilterStatus(status)}
-            className={`btn btn-sm ${filterStatus === status ? 'btn-primary' : 'btn-secondary'}`}
-            style={{ textTransform: 'capitalize' }}
+            type="button"
+            className={`btn ${filterStatus === status ? 'btn-primary' : 'btn-secondary'}`}
+            aria-pressed={filterStatus === status}
           >
-            {status.replace('_', ' ')}
+            {status === 'ALL' ? 'All statuses' : status.replace('_', ' ')}
           </button>
         ))}
-      </div>
+      </div>}
 
-      <div className="portal-card">
+      {!reviewing && <div className="portal-card">
         <DataTable columns={columns} data={visibleRequests} />
-      </div>
+      </div>}
     </div>
   );
 };
